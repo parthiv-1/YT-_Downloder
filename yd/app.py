@@ -134,8 +134,21 @@ def get_best_cookie_file() -> str | None:
         os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         cookie_path = os.path.join(DOWNLOADS_DIR, "env_cookies.txt")
         try:
+            content = env_cookies.strip()
+            # Try base64 decoding to handle Railway multiline environment variable pasting issues
+            import base64
+            try:
+                # Strip spaces and newlines if they are present in base64 string
+                clean_b64 = content.replace(" ", "").replace("\n", "").replace("\r", "")
+                decoded = base64.b64decode(clean_b64).decode("utf-8")
+                if "cookie" in decoded.lower() or "# netscape" in decoded.lower() or "\t" in decoded:
+                    content = decoded
+                    print("  [Cookies] Successfully decoded base64 cookies from environment")
+            except Exception:
+                pass
+
             with open(cookie_path, "w", encoding="utf-8") as f:
-                f.write(env_cookies.strip())
+                f.write(content)
             return cookie_path
         except Exception as e:
             print(f"  [Cookies] Error writing cookies from environment: {e}")
@@ -306,13 +319,8 @@ def _extract_with_cookie_fallback(
                 }
 
                 # Forced Node.js runtime for n-challenge solving
-                if _NODE_PATH and os.path.isfile(_NODE_PATH):
-                    node_dir = os.path.dirname(_NODE_PATH)
-                    os.environ["PATH"] = (
-                        node_dir + os.pathsep + os.environ.get("PATH", "")
-                    )
-                    os.environ["YTDLP_JS_RUNTIME"] = "node"
-                    opts["ypath"] = node_dir
+                # Let yt-dlp automatically detect Node.js/Deno from PATH
+                pass
 
                 if cfg["headers"]:
                     opts["http_headers"] = cfg["headers"]
