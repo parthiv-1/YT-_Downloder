@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YT Downloader — HD Video Download</title>
+  <meta name="description" content="Download YouTube videos in HD quality (720p, 1080p) for free. Fast, clean, and easy-to-use YouTube downloader." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Icons (Feather) -->
+  <script src="https://unpkg.com/feather-icons"></script>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<!-- ── Animated Background ── -->
+<div class="bg-orb orb1"></div>
+<div class="bg-orb orb2"></div>
+<div class="bg-orb orb3"></div>
+
+<!-- ── Main Container ── -->
+<main class="container" role="main">
+
+  <!-- ── Header ── -->
+  <header class="hero">
+    <div class="logo-mark" aria-hidden="true">
+      <i data-feather="youtube"></i>
+    </div>
+    <h1 class="hero-title">YT Downloader</h1>
+    <p class="hero-sub">Download YouTube videos in HD quality — fast &amp; free</p>
+  </header>
+
+  <!-- ── URL Input Card ── -->
+  <section class="card input-card" aria-label="Video URL input">
+    <div class="input-group">
+      <span class="input-icon" aria-hidden="true"><i data-feather="link"></i></span>
+      <input
+        id="url-input"
+        type="url"
+        class="url-input"
+        placeholder="Paste YouTube video URL here…"
+        autocomplete="off"
+        spellcheck="false"
+        aria-label="YouTube video URL"
+      />
+      <button id="fetch-btn" class="btn btn-primary" aria-label="Fetch video info">
+        <span class="btn-text">Fetch Video</span>
+        <span class="btn-icon"><i data-feather="arrow-right"></i></span>
+      </button>
+    </div>
+
+    <!-- Inline error message -->
+    <div id="url-error" class="inline-error" role="alert" aria-live="polite" hidden></div>
+  </section>
+
+  <!-- ── Loading Skeleton ── -->
+  <section id="loading-card" class="card loading-card" aria-busy="true" aria-label="Loading video info" hidden>
+    <div class="skeleton-row">
+      <div class="skeleton skeleton-thumb"></div>
+      <div class="skeleton-lines">
+        <div class="skeleton skeleton-line w-70"></div>
+        <div class="skeleton skeleton-line w-40"></div>
+        <div class="skeleton skeleton-line w-55"></div>
+      </div>
+    </div>
+    <p class="loading-text"><span class="spinner" aria-hidden="true"></span> Fetching video details…</p>
+  </section>
+
+  <!-- ── Video Info Card ── -->
+  <section id="video-card" class="card video-card" aria-label="Video information" hidden>
+
+    <!-- Thumbnail + Meta -->
+    <div class="video-meta">
+      <div class="thumb-wrapper">
+        <img id="video-thumb" src="" alt="Video thumbnail" class="video-thumb" loading="lazy" />
+        <div class="thumb-overlay" aria-hidden="true">
+          <i data-feather="play-circle"></i>
+        </div>
+      </div>
+      <div class="video-info">
+        <h2 id="video-title" class="video-title"></h2>
+        <p id="video-channel" class="video-channel">
+          <i data-feather="user" aria-hidden="true"></i>
+          <span></span>
+        </p>
+        <p id="video-duration" class="video-duration">
+          <i data-feather="clock" aria-hidden="true"></i>
+          <span></span>
+        </p>
+        <p id="video-views" class="video-views">
+          <i data-feather="eye" aria-hidden="true"></i>
+          <span></span>
+        </p>
+      </div>
+    </div>
+
+    <!-- Quality Selection -->
+    <div class="quality-section">
+      <h3 class="quality-heading">
+        <i data-feather="sliders" aria-hidden="true"></i>
+        Choose Quality
+      </h3>
+      
+      <!-- Smart Download Button -->
+      <div class="smart-download-wrapper">
+        <button id="smart-download-btn" class="btn btn-smart" aria-label="Smart Download (Shorts 2K / Long 4K)">
+          <div class="smart-icon-stack">
+            <i data-feather="zap" class="zap-icon"></i>
+            <i data-feather="star" class="star-icon"></i>
+          </div>
+          <div class="smart-text">
+            <span class="smart-title">Smart HD Download</span>
+            <span class="smart-subtitle" id="smart-desc">Shorts 2K / Long 4K</span>
+          </div>
+        </button>
+
+        <button id="mp3-download-btn" class="btn btn-audio" aria-label="Download MP3 Audio">
+          <div class="audio-icon-wrapper">
+             <i data-feather="music"></i>
+          </div>
+          <div class="audio-text">
+            <span class="audio-title">Download MP3</span>
+            <span class="audio-subtitle">High Quality • 192kbps</span>
+          </div>
+        </button>
+      </div>
+
+      <div id="quality-grid" class="quality-grid" role="list" aria-label="Available download qualities">
+        <!-- Injected by JS -->
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Download Progress Card ── -->
+  <section id="progress-card" class="card progress-card" aria-label="Download progress" hidden>
+    <div class="progress-header">
+      <span id="progress-label" class="progress-label">
+        <span class="spinner" aria-hidden="true"></span>
+        Preparing download…
+      </span>
+      <div class="progress-info-group">
+        <span id="progress-eta" class="progress-eta" hidden></span>
+        <span id="progress-pct" class="progress-pct">0%</span>
+      </div>
+    </div>
+
+    <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track">
+      <div id="progress-bar" class="progress-bar"></div>
+    </div>
+
+    <div id="progress-meta" class="progress-meta"></div>
+
+    <!-- Download ready button (hidden until done) -->
+    <a id="download-link" class="btn btn-success" hidden>
+      <i data-feather="download" aria-hidden="true"></i>
+      Save File
+    </a>
+
+    <!-- Cancel / re-try -->
+    <button id="cancel-btn" class="btn btn-ghost">
+      <i data-feather="x" aria-hidden="true"></i>
+      Cancel
+    </button>
+  </section>
+
+  <!-- ── Toast Notification ── -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+</main>
+
+<!-- ── Footer ── -->
+<footer class="site-footer">
+  <p>CREATED BY <span aria-label="love">♥</span> <a href="https://www.instagram.com/p_parthiv_888?igsh=dzNka2FxZm1keGZj" target="_blank" style="color: white; text-decoration: none;">@P_PARTHIV_888</a></p>
+</footer>
+<!-- ── Script ── -->
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>feather.replace();</script>
+</body>
+</html>
