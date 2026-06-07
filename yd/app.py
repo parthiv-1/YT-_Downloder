@@ -127,7 +127,19 @@ DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
 
 
 def get_best_cookie_file() -> str | None:
-    """Find the most relevant cookie file in the downloads folder."""
+    """Find the most relevant cookie file in the downloads folder or read from env."""
+    # Check if cookies are set in environment variables
+    env_cookies = os.environ.get("YOUTUBE_COOKIES")
+    if env_cookies:
+        os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+        cookie_path = os.path.join(DOWNLOADS_DIR, "env_cookies.txt")
+        try:
+            with open(cookie_path, "w", encoding="utf-8") as f:
+                f.write(env_cookies.strip())
+            return cookie_path
+        except Exception as e:
+            print(f"  [Cookies] Error writing cookies from environment: {e}")
+
     if not os.path.isdir(DOWNLOADS_DIR):
         return None
 
