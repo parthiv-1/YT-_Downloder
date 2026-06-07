@@ -140,6 +140,8 @@ def get_best_cookie_file() -> str | None:
             try:
                 # Strip spaces and newlines if they are present in base64 string
                 clean_b64 = content.replace(" ", "").replace("\n", "").replace("\r", "")
+                # Add padding if missing
+                clean_b64 += "=" * ((4 - len(clean_b64) % 4) % 4)
                 decoded = base64.b64decode(clean_b64).decode("utf-8")
                 if "cookie" in decoded.lower() or "# netscape" in decoded.lower() or "\t" in decoded:
                     content = decoded
