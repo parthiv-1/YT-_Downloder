@@ -703,14 +703,145 @@ body {
 
 /* ── Responsive ── */
 @media (max-width: 560px) {
-  .card { padding: 1.3rem 1.2rem; }
+  body {
+    padding: 1rem 0.75rem 2.5rem;
+  }
 
-  .input-group { flex-wrap: wrap; }
-  .url-input   { flex-basis: 100%; font-size: 0.9rem; }
-  .btn-primary { width: 100%; justify-content: center; }
+  .hero {
+    padding: 1.5rem 0.5rem 0.75rem;
+  }
 
-  .video-meta { flex-direction: column; }
-  .thumb-wrapper { width: 100%; height: 180px; }
+  .logo-mark {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    margin-bottom: 0.75rem;
+  }
+  .logo-mark svg {
+    width: 28px;
+    height: 28px;
+  }
 
-  .quality-grid { grid-template-columns: repeat(2, 1fr); }
+  .hero-sub {
+    font-size: 0.95rem;
+  }
+
+  .card {
+    padding: 1.25rem 1rem;
+    border-radius: var(--r-lg);
+  }
+
+  .input-group {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+    padding: 0.5rem 0.5rem 0.5rem 1rem;
+    border-radius: var(--r-md);
+  }
+  .input-icon {
+    grid-column: 1;
+    grid-row: 1;
+    display: flex;
+    align-items: center;
+  }
+  .url-input {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 0.92rem;
+    width: 100%;
+    padding: 0.35rem 0;
+  }
+  .btn-primary {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+    width: 100%;
+    justify-content: center;
+    margin-top: 0.25rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .video-meta {
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .thumb-wrapper {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 16 / 9;
+    border-radius: var(--r-md);
+  }
+
+  .video-info {
+    gap: 0.35rem;
+  }
+  .video-title {
+    font-size: 1rem;
+  }
+
+  .smart-download-wrapper {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .btn-smart, .btn-audio {
+    padding: 0.9rem 1.2rem;
+    border-radius: var(--r-md);
+  }
+
+  .smart-icon-stack, .audio-icon-wrapper {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    margin-right: 0.88rem;
+  }
+  .smart-icon-stack svg, .audio-icon-wrapper svg {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .smart-title, .audio-title {
+    font-size: 1.05rem;
+  }
+  .smart-subtitle, .audio-subtitle {
+    font-size: 0.75rem;
+  }
+
+  .quality-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  .quality-btn {
+    padding: 0.75rem 0.5rem;
+    border-radius: var(--r-md);
+    gap: 0.25rem;
+  }
+  .quality-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+  .quality-label {
+    font-size: 1.15rem;
+  }
+  .quality-note {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+  }
+
+  /* Progress Card */
+  .progress-card {
+    gap: 0.88rem;
+  }
+  .progress-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .progress-info-group {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+  }
 }
