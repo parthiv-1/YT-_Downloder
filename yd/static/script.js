@@ -149,7 +149,7 @@ async function fetchVideoInfo() {
     showUrlError("Please enter a YouTube URL.");
     return;
   }
-  if (!/^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\/.+/.test(url)) {
+  if (!/^(https?:\/\/)?([a-zA-Z0-9\-]+\.)?(youtube\.com|youtu\.be)\/.+/.test(url)) {
     showUrlError("Please enter a valid YouTube URL.");
     return;
   }

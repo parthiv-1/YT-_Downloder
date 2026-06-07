@@ -89,7 +89,7 @@ _download_locks: dict[str, threading.Lock] = {}
 def sanitize_url(url: str) -> str:
     """Basic sanitization — strip whitespace and validate YouTube domain."""
     url = url.strip()
-    pattern = r"^(https?://)?(www\.)?(youtube\.com|youtu\.be)/.+"
+    pattern = r"^(https?://)?([a-zA-Z0-9\-]+\.)?(youtube\.com|youtu\.be)/.+"
     if not re.match(pattern, url):
         raise ValueError("Not a valid YouTube URL.")
     return url
