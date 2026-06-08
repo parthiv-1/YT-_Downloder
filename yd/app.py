@@ -61,6 +61,9 @@ HAS_FFMPEG = FFMPEG_PATH is not None
 print(
     f"  [FFmpeg] {'OK: ' + FFMPEG_PATH if HAS_FFMPEG else 'NOT FOUND — 4K/2K/1080p unavailable'}"
 )
+_node_detect = shutil.which("node")
+print(f"  [Node.js] {'OK: ' + _node_detect if _node_detect else 'NOT FOUND — YouTube signature challenge decryption might fail'}")
+print(f"  [yt-dlp] Version: {yt_dlp.version.__version__}")
 
 # Determine the directory where the executable or script is located
 if getattr(sys, "frozen", False):
