@@ -1,7 +1,6 @@
 # nixpacks.toml
-# This configuration tells Railway's Nixpacks builder to install Python, Node.js (needed for yt-dlp JS decryption), and FFmpeg.
-
-providers = ["...", "node", "python"]
+# This configuration tells Railway's Nixpacks builder to install Python (detected automatically), 
+# and explicitly adds Node.js (needed for yt-dlp JS decryption) and FFmpeg to the Nix packages.
 
 [phases.setup]
-nixPkgs = ["...", "ffmpeg"]
+nixPkgs = ["...", "ffmpeg", "nodejs"]
