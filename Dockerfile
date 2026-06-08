@@ -20,5 +20,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Run the application with gunicorn, which will automatically load gunicorn.conf.py
-CMD ["gunicorn", "yd.app:app"]
+# Set PYTHONPATH to make sure the app modules can be imported
+ENV PYTHONPATH=/app
+
+# Run the application with gunicorn, explicitly loading gunicorn.conf.py
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "yd.app:app"]
