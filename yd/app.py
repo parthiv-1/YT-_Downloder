@@ -617,6 +617,31 @@ def _download_worker(
 # ─────────────────────────────────────────────────────────────
 
 
+@app.route("/api/debug")
+def api_debug():
+    import subprocess
+    try:
+        node_ver = subprocess.check_output(["node", "--version"], stderr=subprocess.STDOUT).decode().strip()
+    except Exception as e:
+        node_ver = f"Error: {e}"
+        
+    try:
+        # Check ffmpeg from path or FFMPEG_PATH
+        path_to_use = FFMPEG_PATH or "ffmpeg"
+        ffmpeg_ver = subprocess.check_output([path_to_use, "-version"], stderr=subprocess.STDOUT).decode().split('\n')[0].strip()
+    except Exception as e:
+        ffmpeg_ver = f"Error: {e}"
+        
+    return jsonify({
+        "node": node_ver,
+        "ffmpeg": ffmpeg_ver,
+        "yt_dlp_version": yt_dlp.version.__version__,
+        "cookies_env_exists": "YOUTUBE_COOKIES" in os.environ,
+        "cookies_env_length": len(os.environ.get("YOUTUBE_COOKIES", "")),
+        "cookies_file_exists": os.path.isfile(get_best_cookie_file() or ""),
+    })
+
+
 @app.route("/")
 def index():
     """Home page."""
