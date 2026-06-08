@@ -20,5 +20,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the application code
 COPY . .
 
-# Run the application with gunicorn, binding to the PORT environment variable provided by Railway
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:$PORT yd.app:app"]
+# Run the application with gunicorn, which will automatically load gunicorn.conf.py
+CMD ["gunicorn", "yd.app:app"]
