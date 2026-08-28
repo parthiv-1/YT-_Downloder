@@ -203,11 +203,19 @@ _RETRYABLE_ERROR_KEYWORDS = (
     "keyring",
     "unavailable",
     "format is not available",
+    "requested format is not available",
     "sign in to confirm you're not a bot",
     "n-parameter",
     "drm protected",
     "sign in to confirm",
     "not available in your country",
+    "403",
+    "forbidden",
+    "http error 403",
+    "page needs to be reloaded",
+    "the page needs to be reloaded",
+    "sabr",
+    "reloaded",
 )
 
 
@@ -249,17 +257,44 @@ def _extract_with_cookie_fallback(
 
     configs = [
         {
-            "name": "4K Unlocked Mode",
-            "clients": ["android_vr", "tv", "web"],
-            "headers": {},  # Clean for VR/TV protocol
-        },
-        {"name": "Legacy Mode", "clients": ["android", "ios"], "headers": {}},
-        {
-            "name": "Web Mode",
-            "clients": ["web", "mweb", "web_embedded"],
+            # web: generates session-signed URLs via cookies — most reliable, avoids 403
+            "name": "Web (Session-Signed)",
+            "clients": ["web"],
             "headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             },
+        },
+        {
+            # tv_embedded: good for 4K, bypasses some restrictions
+            "name": "TV Embedded",
+            "clients": ["tv_embedded"],
+            "headers": {},
+        },
+        {
+            # android_vr: 4K capable but unsigned URLs can expire (403 mid-download)
+            "name": "4K Mode (android_vr)",
+            "clients": ["android_vr"],
+            "headers": {},
+        },
+        {
+            # mweb: mobile web client, avoids SABR experiment issues
+            "name": "Mobile Web",
+            "clients": ["mweb"],
+            "headers": {
+                "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36",
+            },
+        },
+        {
+            # android: reliable fallback, avoids SABR issues on most videos
+            "name": "Android Fallback",
+            "clients": ["android"],
+            "headers": {},
+        },
+        {
+            # default: let yt-dlp pick the best available client
+            "name": "Default Auto",
+            "clients": ["default"],
+            "headers": {},
         },
     ]
 
@@ -279,11 +314,7 @@ def _extract_with_cookie_fallback(
                     "youtube": {
                         "player_client": cfg["clients"],
                         "include_dash_manifest": True,
-                        "player_skip": (
-                            ["web_embedded", "js", "configs"]
-                            if not download
-                            else ["web_embedded"]
-                        ),
+                        "player_skip": ["web_embedded"],
                     }
                 }
                 if cfg["headers"]:
@@ -315,11 +346,7 @@ def _extract_with_cookie_fallback(
                     "youtube": {
                         "player_client": cfg["clients"],
                         "include_dash_manifest": True,
-                        "player_skip": (
-                            ["web_embedded", "js", "configs"]
-                            if not download
-                            else ["web_embedded"]
-                        ),
+                        "player_skip": ["web_embedded"],
                     }
                 }
 
@@ -348,12 +375,11 @@ def _extract_with_cookie_fallback(
 
             except Exception as exc:
                 last_exc = exc
-                if _is_retryable_error(exc) or str(exc) == "low quality result":
-                    print(
-                        f"  [Warning] [{label}] failed or low quality — attempting next Compatibility Mode..."
-                    )
-                    continue
-                raise
+                # Always retry with next client — every client strategy gets a chance
+                print(
+                    f"  [Warning] [{label}] failed ({str(exc)[:80]}) — attempting next Compatibility Mode..."
+                )
+                continue
 
     # All strategies and clients failed
     raise last_exc if last_exc else Exception("All extraction strategies failed.")
@@ -534,25 +560,29 @@ def _download_worker(
             # Without FFmpeg: download best pre-merged stream (≤720p)
             if HAS_FFMPEG:
                 if height == 0:
+                    # Best quality: prefer DASH separate streams, fallback to combined
                     fmt = "bestvideo+bestaudio/best"
                 else:
-                    # Force exact height search first for pure quality, fallback to <=
+                    # DASH-only format (no codec restriction so web/tv_embedded clients work).
+                    # Tries exact height first, then nearest lower resolution.
+                    # No bare 'best' fallback — that would silently give a pre-merged 480p stream.
                     fmt = (
                         f"bestvideo[height={height}]+bestaudio/"
-                        f"bestvideo[height<={height}]+bestaudio/"
-                        f"best[height<={height}]/best"
+                        f"bestvideo[height<={height}]+bestaudio"
                     )
+                    print(f"  [Format] DASH format for {height}p: {fmt}")
             else:
                 # No FFmpeg — use pre-merged streams only (max 720p)
                 if height == 0:
                     fmt = "best[ext=mp4]/best[ext=webm]/best"
                 else:
+                    # Try exact height first, then fallback to nearest lower quality
                     capped = min(height, 720)
                     fmt = (
-                        f"best[height<={capped}][ext=mp4]"
-                        f"/best[height<={capped}][ext=webm]"
-                        f"/best[height<={capped}]"
-                        f"/best"
+                        f"best[height={capped}][ext=mp4]/"
+                        f"best[height<={capped}][ext=mp4]/"
+                        f"best[height<={capped}][ext=webm]/"
+                        f"best[height<={capped}]/best"
                     )
 
         base_opts = {
@@ -560,22 +590,29 @@ def _download_worker(
             "outtmpl": output_template,
             "merge_output_format": "mkv" if height != -2 else "mp3",
             "postprocessors": postprocessors,
-            "quiet": True,
-            "no_warnings": True,
+            "quiet": False,
+            "no_warnings": False,
+            "verbose": False,  # Flip to True for deep debugging
             "noplaylist": True,
             "progress_hooks": [progress_hook],
             # ── Timeout & Retry Settings ──────────────────────────
             "socket_timeout": 30,
-            "retries": 1000,
-            "fragment_retries": 1000,
+            "retries": 15,
+            "fragment_retries": 15,
             "file_access_retries": 5,
             "extractor_retries": 5,
+            # Enable resume to continue from where we left off after a 403
             "continuedl": True,
-            "concurrent_fragment_downloads": 16,
-            "buffersize": 2097152,
-            "http_chunk_size": 10485760,
+            # CRITICAL: 1 fragment at a time avoids YouTube rate-limiting (403)
+            # More than 1 triggers YouTube's bot detection on large DASH files
+            "concurrent_fragment_downloads": 1,
+            "buffersize": 1024 * 1024,       # 1 MB buffer
+            "http_chunk_size": 10 * 1024 * 1024,  # 10 MB chunks
+            # Small sleep between requests to appear more human-like
+            "sleep_interval_requests": 0.5,
             "sleep_interval": 0,
-            "max_sleep_interval": 0,
+            "max_sleep_interval": 2,
+            "legacyserverconnect": True,
         }
 
         # Add FFmpeg location if available
@@ -587,6 +624,20 @@ def _download_worker(
                 base_opts, url, download=True, hint=hint
             )
             title = info.get("title", "video") if info else "video"
+
+            # Log the actual format chosen by yt-dlp for debugging
+            if info:
+                chosen_height = info.get("height") or info.get("resolution", "?")
+                chosen_format = info.get("format", "?")
+                chosen_ext = info.get("ext", "?")
+                print(f"  [Download] Chosen format: {chosen_format} | height={chosen_height} | ext={chosen_ext}")
+
+                # Quality validation: warn if we got much lower quality than requested
+                if height > 0 and isinstance(chosen_height, int) and chosen_height < height * 0.75:
+                    print(
+                        f"  [Quality Warn] Requested {height}p but got {chosen_height}p! "
+                        f"YouTube may have throttled DASH streams — try again or use a cookies.txt."
+                    )
 
             # Find the resulting file
             result_file = None
@@ -605,9 +656,15 @@ def _download_worker(
                 progress_store[task_id]["error"] = "Downloaded file not found."
 
         except yt_dlp.utils.DownloadError as e:
+            raw = str(e).split("\n")[0]
+            # Clean ANSI escape codes
+            clean = re.sub(r"\x1B\[[0-9;]*[mK]", "", raw).strip()
+            clean = re.sub(r"^ERROR:\s*", "", clean)
+            print(f"  [DownloadError] {clean}")
             progress_store[task_id]["status"] = "error"
-            progress_store[task_id]["error"] = str(e).split("\n")[0]
+            progress_store[task_id]["error"] = clean
         except Exception as e:
+            print(f"  [UnexpectedError] {str(e)}")
             progress_store[task_id]["status"] = "error"
             progress_store[task_id]["error"] = f"Unexpected error: {str(e)}"
 
