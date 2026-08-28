@@ -7,49 +7,75 @@ A production-quality YouTube video downloader built with **Python · Flask · yt
 ## 📁 Folder Structure
 
 ```
-youtube-downloader/
+test_video.music/          ← Project Root
 │
-├── app.py                  # Flask backend (routes, yt-dlp, SSE streaming)
-├── requirements.txt        # Python dependencies
-├── downloads/              # Temp download folder (auto-created, auto-cleaned)
+├── venv/                  # Python virtual environment
+├── yd/                    # Main application folder  ← app.py is HERE
+│   ├── app.py             # Flask backend (routes, yt-dlp, SSE)
+│   ├── requirements.txt   # Python dependencies
+│   ├── downloads/         # Temp download folder (auto-created)
+│   ├── templates/
+│   │   └── index.html     # HTML template
+│   └── static/
+│       ├── style.css      # Dark glassmorphism UI
+│       └── script.js      # Frontend logic
 │
-├── templates/
-│   └── index.html          # Jinja2 HTML template
-│
-└── static/
-    ├── style.css           # Dark glassmorphism UI styles
-    └── script.js           # Frontend logic (fetch API + SSE progress)
+├── Dockerfile
+├── gunicorn.conf.py
+├── nixpacks.toml
+└── requirements.txt
 ```
 
 ---
 
 ## ⚙️ Installation
 
-### Prerequisites
-- Python 3.10+
-- `pip`
-- **FFmpeg** installed and on your PATH (required to merge HD video + audio streams)
-
-### Install FFmpeg (Windows)
+### Step 1 — Install FFmpeg (Windows, required for HD/4K)
 ```powershell
 winget install --id=Gyan.FFmpeg -e
 ```
-Or download from https://ffmpeg.org/download.html and add to PATH.
 
-### Install Python dependencies
-```bash
-pip install -r requirements.txt
+### Step 2 — Create virtual environment
+```powershell
+python -m venv venv
+```
+
+### Step 3 — Install dependencies
+```powershell
+venv\Scripts\pip install -r yd\requirements.txt
 ```
 
 ---
 
-## ▶️ Run Locally
+## ▶️ How to Run
 
-```bash
-python app.py
+> ⚠️ **`app.py` is inside the `yd/` folder — NOT the project root!**
+
+### ✅ Correct way (from project root):
+```powershell
+venv\Scripts\python.exe yd\app.py
 ```
 
-Then open **http://127.0.0.1:5000** in your browser.
+### Or go into the yd folder first:
+```powershell
+cd yd
+..\venv\Scripts\python.exe app.py
+```
+
+Then open 👉 **http://127.0.0.1:5000**
+
+---
+
+## ❌ Common Mistake
+
+```powershell
+# WRONG — app.py is NOT in the root!
+python app.py
+# Error: can't open file 'app.py': No such file or directory
+
+# CORRECT
+venv\Scripts\python.exe yd\app.py
+```
 
 ---
 
@@ -57,12 +83,12 @@ Then open **http://127.0.0.1:5000** in your browser.
 
 | Step | Action |
 |------|--------|
-| 1 | Paste a YouTube URL and click **Fetch Video** |
-| 2 | The backend fetches metadata via yt-dlp (title, thumbnail, available resolutions) |
-| 3 | Available quality options (1080p, 720p, 480p, 360p) are shown as cards |
-| 4 | Click a quality card to start downloading in the background |
-| 5 | A real-time progress bar (via Server-Sent Events) updates as it downloads |
-| 6 | When complete, a **Save File** button appears to save the MP4 to your computer |
+| 1 | Paste a YouTube URL → click **Fetch Video** |
+| 2 | Backend fetches metadata (title, thumbnail, resolutions) |
+| 3 | Quality cards: 4K, 2K, 1080p, 720p, 480p, 360p |
+| 4 | Click quality → background download starts |
+| 5 | Real-time progress bar via Server-Sent Events |
+| 6 | **Save File** button appears when done |
 
 ---
 
@@ -71,26 +97,17 @@ Then open **http://127.0.0.1:5000** in your browser.
 | Method | Route | Description |
 |--------|-------|-------------|
 | `GET`  | `/` | Home page |
-| `POST` | `/api/info` | Fetch video metadata and available resolutions |
-| `POST` | `/api/download` | Start background download, returns `task_id` |
-| `GET`  | `/api/progress/<task_id>` | SSE stream for real-time download progress |
-| `GET`  | `/api/file/<task_id>` | Serve completed file as browser download |
-
----
-
-## 🔒 Security Notes
-
-- Input is validated on both client (JS regex) and server (Python regex)
-- Only `youtube.com` and `youtu.be` URLs are accepted
-- Files are auto-deleted after 10 minutes
-- No concurrent duplicate downloads allowed per task
+| `POST` | `/api/info` | Fetch video metadata |
+| `POST` | `/api/download` | Start background download |
+| `GET`  | `/api/progress/<task_id>` | SSE real-time progress |
+| `GET`  | `/api/file/<task_id>` | Download completed file |
+| `GET`  | `/api/debug` | Debug info (ffmpeg, node, yt-dlp) |
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Backend:** Python 3.10+, Flask 3.x, yt-dlp
-- **Frontend:** Vanilla HTML5, CSS3, JavaScript (ES2022)
-- **Streaming:** Server-Sent Events (SSE) for real-time progress
-- **Fonts:** Inter (Google Fonts)
-- **Icons:** Feather Icons
+- **Backend:** Python 3.10+, Flask 3.x, yt-dlp 2026.08.19+
+- **Frontend:** Vanilla HTML5, CSS3, JavaScript ES2022
+- **Streaming:** Server-Sent Events (SSE)
+- **Fonts:** Inter (Google Fonts) · **Icons:** Feather Icons
