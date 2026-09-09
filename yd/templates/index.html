@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>YT Downloader — HD Video Download</title>
-  <meta name="description" content="Download YouTube videos in HD quality (720p, 1080p) for free. Fast, clean, and easy-to-use YouTube downloader." />
+  <title>YT & Instagram Downloader — HD Video Download</title>
+  <meta name="description" content="Download YouTube videos and Instagram Reels in HD quality for free. Fast, clean, and easy-to-use video downloader." />
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,6 +16,12 @@
 
   <!-- Stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <style>
+    @keyframes fadeInBadge {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
 </head>
 <body>
 
@@ -29,11 +35,25 @@
 
   <!-- ── Header ── -->
   <header class="hero">
-    <div class="logo-mark" aria-hidden="true">
-      <i data-feather="youtube"></i>
+    <div class="logo-mark" aria-hidden="true" style="display:flex;gap:8px;align-items:center;justify-content:center;">
+      <i data-feather="youtube" style="color:#ff0000;"></i>
+      <span style="font-size:1.2rem;opacity:0.6;">+</span>
+      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none"
+        stroke="url(#igGrad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <defs>
+          <linearGradient id="igGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#fcb045"/>
+            <stop offset="50%" stop-color="#fd1d1d"/>
+            <stop offset="100%" stop-color="#833ab4"/>
+          </linearGradient>
+        </defs>
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="17.5" cy="6.5" r="1.5" fill="#fcb045" stroke="none"/>
+      </svg>
     </div>
-    <h1 class="hero-title">YT Downloader</h1>
-    <p class="hero-sub">Download YouTube videos in HD quality — fast &amp; free</p>
+    <h1 class="hero-title">Video Downloader</h1>
+    <p class="hero-sub">YouTube &amp; Instagram Reels — HD quality download, fast &amp; free</p>
   </header>
 
   <!-- ── URL Input Card ── -->
@@ -44,10 +64,10 @@
         id="url-input"
         type="url"
         class="url-input"
-        placeholder="Paste YouTube video URL here…"
+        placeholder="Paste YouTube or Instagram Reel URL here…"
         autocomplete="off"
         spellcheck="false"
-        aria-label="YouTube video URL"
+        aria-label="YouTube or Instagram video URL"
       />
       <button id="fetch-btn" class="btn btn-primary" aria-label="Fetch video info">
         <span class="btn-text">Fetch Video</span>

@@ -90,12 +90,21 @@ _download_locks: dict[str, threading.Lock] = {}
 
 
 def sanitize_url(url: str) -> str:
-    """Basic sanitization — strip whitespace and validate YouTube domain."""
+    """Basic sanitization — strip whitespace and validate YouTube or Instagram domain."""
     url = url.strip()
-    pattern = r"^(https?://)?([a-zA-Z0-9\-]+\.)?(youtube\.com|youtu\.be)/.+"
-    if not re.match(pattern, url):
-        raise ValueError("Not a valid YouTube URL.")
-    return url
+    youtube_pattern = r"^(https?://)?([a-zA-Z0-9\-]+\.)?(youtube\.com|youtu\.be)/.+"
+    instagram_pattern = r"^(https?://)?(www\.)?instagram\.com/(reel|p|tv|stories)/.+"
+    if re.match(youtube_pattern, url) or re.match(instagram_pattern, url):
+        return url
+    raise ValueError("Valid YouTube URL (youtube.com/youtu.be) or Instagram Reel URL (instagram.com/reel/) enter karo.")
+
+
+def detect_platform(url: str) -> str:
+    """Detect whether URL is from YouTube or Instagram."""
+    url_lower = url.lower()
+    if "instagram.com" in url_lower:
+        return "instagram"
+    return "youtube"
 
 
 def clean_old_files(max_age_seconds: int = 3600) -> None:
@@ -389,17 +398,52 @@ def get_video_info(url: str) -> tuple[dict, dict]:
     """
     Fetch video metadata using yt-dlp without downloading.
     Returns (video_data, strategy_hint).
+    Supports YouTube and Instagram URLs.
     """
+    platform = detect_platform(url)
     base_opts = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
-        "socket_timeout": 10,
+        "socket_timeout": 15,
         "check_formats": False,
     }
 
-    info, hint = _extract_with_cookie_fallback(base_opts, url, download=False)
+    # Instagram: use simple direct extraction with cookie fallback
+    if platform == "instagram":
+        # First try: no cookies (public content)
+        # Second try: cookies from Chrome browser (logged-in content)
+        # Third try: cookies from Firefox browser
+        ig_strategies = [
+            {**base_opts},  # No cookies
+            {**base_opts, "cookiesfrombrowser": ("chrome",)},   # Chrome cookies
+            {**base_opts, "cookiesfrombrowser": ("firefox",)},  # Firefox cookies
+        ]
+        # Also check for manual cookies.txt
+        current_cookie = get_best_cookie_file()
+        if current_cookie:
+            ig_strategies.insert(1, {**base_opts, "cookiefile": current_cookie})
+
+        last_ig_exc = None
+        info = None
+        for ig_opts in ig_strategies:
+            try:
+                with yt_dlp.YoutubeDL(ig_opts) as ydl:
+                    info = ydl.extract_info(url, download=False)
+                print(f"  [Instagram] Successfully extracted info.")
+                break
+            except Exception as e:
+                last_ig_exc = e
+                print(f"  [Instagram] Strategy failed: {str(e)[:80]}, trying next...")
+                continue
+
+        if info is None:
+            raise last_ig_exc if last_ig_exc else Exception("Failed to fetch Instagram reel info.")
+
+        hint = {"cookie_idx": 0, "config_idx": 0}
+    else:
+        info, hint = _extract_with_cookie_fallback(base_opts, url, download=False)
 
     # Build resolution options from available formats
     resolutions_seen = set()
@@ -451,21 +495,23 @@ def get_video_info(url: str) -> tuple[dict, dict]:
             {
                 "label": "Best",
                 "height": 0,
-                "note": "Auto",
+                "note": "Best Available",
                 "needs_ffmpeg": False,
                 "available": True,
             }
         )
 
+    duration = info.get("duration", 0) or 0
     return {
-        "title": info.get("title", "Unknown Title"),
+        "title": info.get("title") or info.get("description", "Instagram Reel") or "Unknown Title",
         "thumbnail": info.get("thumbnail", ""),
-        "duration": info.get("duration", 0),
-        "channel": info.get("uploader", "Unknown"),
+        "duration": duration,
+        "channel": info.get("uploader") or info.get("channel", "Unknown"),
         "view_count": info.get("view_count", 0),
         "resolutions": resolution_list,
         "ffmpeg_available": HAS_FFMPEG,
-        "is_short": (info.get("duration", 0) or 0) <= 60 or "/shorts/" in url.lower(),
+        "is_short": duration <= 60 or "/shorts/" in url.lower() or "/reel/" in url.lower(),
+        "platform": platform,
     }, hint
 
 
@@ -620,9 +666,38 @@ def _download_worker(
             base_opts["ffmpeg_location"] = FFMPEG_LOCATION
 
         try:
-            info, _ = _extract_with_cookie_fallback(
-                base_opts, url, download=True, hint=hint
-            )
+            platform = detect_platform(url)
+
+            if platform == "instagram":
+                # Instagram download: try without cookies, then with browser cookies
+                ig_dl_strategies = [
+                    {**base_opts},
+                    {**base_opts, "cookiesfrombrowser": ("chrome",)},
+                    {**base_opts, "cookiesfrombrowser": ("firefox",)},
+                ]
+                current_cookie = get_best_cookie_file()
+                if current_cookie:
+                    ig_dl_strategies.insert(1, {**base_opts, "cookiefile": current_cookie})
+
+                last_dl_exc = None
+                info = None
+                for ig_dl_opts in ig_dl_strategies:
+                    try:
+                        with yt_dlp.YoutubeDL(ig_dl_opts) as ydl:
+                            info = ydl.extract_info(url, download=True)
+                        print(f"  [Instagram Download] Success.")
+                        break
+                    except Exception as e:
+                        last_dl_exc = e
+                        print(f"  [Instagram Download] Strategy failed: {str(e)[:80]}, trying next...")
+                        continue
+
+                if info is None:
+                    raise last_dl_exc if last_dl_exc else Exception("Instagram download failed.")
+            else:
+                info, _ = _extract_with_cookie_fallback(
+                    base_opts, url, download=True, hint=hint
+                )
             title = info.get("title", "video") if info else "video"
 
             # Log the actual format chosen by yt-dlp for debugging

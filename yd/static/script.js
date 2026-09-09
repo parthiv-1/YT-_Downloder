@@ -49,6 +49,7 @@ const toast         = document.getElementById("toast");
 let currentUrl     = "";          // sanitised URL from last fetch
 let currentHint    = null;        // strategy hint from backend
 let currentIsShort = false;       // for smart quality speed-up
+let currentPlatform = "youtube";  // detected platform: "youtube" | "instagram"
 let isDownloading  = false;       // prevent multiple concurrent downloads
 let sseSource      = null;        // active EventSource connection
 let toastTimer     = null;        // pending toast hide timer
@@ -132,9 +133,64 @@ function setQualityBtnsDisabled(state) {
   if (mp3DownloadBtn) mp3DownloadBtn.disabled = state;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Fetch Video Info
-// ─────────────────────────────────────────────────────────────
+/**
+ * Detect platform from URL string.
+ * @param {string} url
+ * @returns {"youtube"|"instagram"}
+ */
+function detectPlatform(url) {
+  if (/instagram\.com/i.test(url)) return "instagram";
+  return "youtube";
+}
+
+/** Show platform badge near the input */
+function showPlatformBadge(platform) {
+  let badge = document.getElementById("platform-badge");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.id = "platform-badge";
+    badge.style.cssText = `
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px; font-size: 0.78rem;
+      font-weight: 600; margin-top: 8px; transition: all 0.3s ease;
+      animation: fadeInBadge 0.4s ease;
+    `;
+    // Insert below the input group
+    const inputCard = document.querySelector(".input-card");
+    inputCard.appendChild(badge);
+  }
+
+  if (platform === "instagram") {
+    badge.style.background = "linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045)";
+    badge.style.color = "#fff";
+    badge.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+      </svg>
+      Instagram Reel`;
+  } else {
+    badge.style.background = "linear-gradient(135deg, #ff0000, #cc0000)";
+    badge.style.color = "#fff";
+    badge.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5
+          2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01
+          a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34
+          6.34 6.34 0 0 0 6.33-6.34V8.69a8.27 8.27 0 0 0 4.84 1.55V6.79a4.85 4.85 0 0 1-1.07-.1z"/>
+      </svg>
+      YouTube Video`;
+  }
+  badge.hidden = false;
+}
+
+/** Hide platform badge */
+function hidePlatformBadge() {
+  const badge = document.getElementById("platform-badge");
+  if (badge) badge.hidden = true;
+}
 
 /**
  * Called when user clicks "Fetch Video".
@@ -143,16 +199,27 @@ function setQualityBtnsDisabled(state) {
 async function fetchVideoInfo() {
   const url = urlInput.value.trim();
   clearUrlError();
+  hidePlatformBadge();
 
-  // Client-side basic validation
+  // Client-side basic validation — YouTube OR Instagram
   if (!url) {
-    showUrlError("Please enter a YouTube URL.");
+    showUrlError("Please enter a YouTube or Instagram URL.");
     return;
   }
-  if (!/^(https?:\/\/)?([a-zA-Z0-9\-]+\.)?(youtube\.com|youtu\.be)\/.+/.test(url)) {
-    showUrlError("Please enter a valid YouTube URL.");
+
+  const isYT = /^(https?:\/\/)?([a-zA-Z0-9\-]+\.)?(youtube\.com|youtu\.be)\/.+/.test(url);
+  const isIG = /^(https?:\/\/)?(www\.)?instagram\.com\/(reel|p|tv|stories)\/.+/.test(url);
+
+  if (!isYT && !isIG) {
+    showUrlError("Please enter a valid YouTube or Instagram Reel URL.");
     return;
   }
+
+  const platform = detectPlatform(url);
+  currentPlatform = platform;
+
+  // Show platform badge
+  showPlatformBadge(platform);
 
   // Reset UI
   showSection("loading-card");
@@ -180,6 +247,7 @@ async function fetchVideoInfo() {
     currentUrl = url;
     currentHint = data.hint;
     currentIsShort = data.is_short;
+    currentPlatform = data.platform || platform;
 
     // Populate video metadata
     videoThumb.src    = data.thumbnail || "";
@@ -189,8 +257,10 @@ async function fetchVideoInfo() {
     videoDuration.textContent = formatDuration(data.duration);
     videoViews.textContent    = formatViews(data.view_count);
 
-    // Set Smart Download description
-    if (data.is_short) {
+    // Set Smart Download description based on platform
+    if (currentPlatform === "instagram") {
+      smartDesc.textContent = "Instagram Reel — Best Quality";
+    } else if (data.is_short) {
       smartDesc.textContent = "Short detected — Targeting 2K (1440p)";
     } else {
       smartDesc.textContent = "Long video — Targeting 4K (2160p)";
