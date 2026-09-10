@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">HD Downloader</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_change_url">Server Settings</string>
+    <string name="server_dialog_title">Server Address</string>
+    <string name="server_dialog_hint">http://192.168.1.15:5000 or https://...</string>
+    <string name="server_dialog_save">Connect</string>
+    <string name="server_dialog_cancel">Cancel</string>
+    <string name="loading_text">Connecting to Downloader Server...</string>
+    <string name="error_connect_title">Cannot connect to server</string>
+    <string name="error_connect_desc">Make sure the Flask server is running or configure the server address.</string>
+    <string name="btn_configure_server">Change Server Address</string>
+    <string name="btn_retry">Retry</string>
+</resources>

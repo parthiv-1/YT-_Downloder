@@ -8,3 +8,11 @@ __pycache__/
 .vscode/
 .env
 *.zip
+
+# Android
+android/.gradle/
+android/build/
+android/**/build/
+android/local.properties
+*.apk
+*.aab
