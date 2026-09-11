@@ -11,4 +11,5 @@
     <string name="error_connect_desc">Make sure the Flask server is running or configure the server address.</string>
     <string name="btn_configure_server">Change Server Address</string>
     <string name="btn_retry">Retry</string>
+    <string name="action_instagram_login">Login to Instagram (Unlock 18+)</string>
 </resources>

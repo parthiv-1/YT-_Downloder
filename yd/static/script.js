@@ -554,7 +554,15 @@ function toggleCookieModal(show) {
   if (show && cookieInput) cookieInput.focus();
 }
 
-if (btnOpenCookieModal) btnOpenCookieModal.addEventListener("click", () => toggleCookieModal(true));
+if (btnOpenCookieModal) {
+  btnOpenCookieModal.addEventListener("click", () => {
+    if (window.AndroidApp && typeof window.AndroidApp.openInstagramLogin === "function") {
+      window.AndroidApp.openInstagramLogin();
+      return;
+    }
+    toggleCookieModal(true);
+  });
+}
 if (btnCloseCookieModal) btnCloseCookieModal.addEventListener("click", () => toggleCookieModal(false));
 if (btnCancelCookieModal) btnCancelCookieModal.addEventListener("click", () => toggleCookieModal(false));
 if (modalBackdrop) modalBackdrop.addEventListener("click", () => toggleCookieModal(false));

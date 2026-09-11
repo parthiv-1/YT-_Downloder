@@ -16,6 +16,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.URLUtil;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -23,6 +24,10 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import org.json.JSONObject;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
@@ -119,6 +124,7 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
+        webView.addJavascriptInterface(new AndroidBridge(), "AndroidApp");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -297,6 +303,79 @@ public class MainActivity extends AppCompatActivity {
         builder.create().show();
     }
 
+    public class AndroidBridge {
+        @JavascriptInterface
+        public void openInstagramLogin() {
+            runOnUiThread(() -> showInstagramLoginDialog());
+        }
+    }
+
+    private void showInstagramLoginDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle(R.string.action_instagram_login);
+
+        WebView igWebView = new WebView(this);
+        WebSettings ws = igWebView.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setDatabaseEnabled(true);
+        ws.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
+
+        AlertDialog dialog = builder.setView(igWebView)
+                .setNegativeButton(R.string.server_dialog_cancel, (d, w) -> d.dismiss())
+                .create();
+
+        igWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                String cookie = CookieManager.getInstance().getCookie("https://www.instagram.com");
+                if (cookie != null && cookie.contains("sessionid")) {
+                    syncCookiesToServer(cookie);
+                    dialog.dismiss();
+                }
+            }
+        });
+
+        igWebView.loadUrl("https://www.instagram.com/accounts/login/");
+        dialog.show();
+    }
+
+    private void syncCookiesToServer(String cookies) {
+        Toast.makeText(this, "Syncing Instagram login...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                URL url = new URL(getServerUrl() + "/api/set-cookies");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Content-Type", "application/json; utf-8");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+
+                JSONObject json = new JSONObject();
+                json.put("cookies", cookies);
+
+                try (OutputStream os = conn.getOutputStream()) {
+                    byte[] input = json.toString().getBytes("utf-8");
+                    os.write(input, 0, input.length);
+                }
+
+                int responseCode = conn.getResponseCode();
+                runOnUiThread(() -> {
+                    if (responseCode == 200) {
+                        Toast.makeText(MainActivity.this, "🎉 18+ Reels Unlocked & Synced!", Toast.LENGTH_LONG).show();
+                        webView.reload();
+                    } else {
+                        Toast.makeText(MainActivity.this, "Sync response: " + responseCode, Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Sync error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            }
+        }).start();
+    }
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main_menu, menu);
@@ -308,6 +387,9 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
         if (id == R.id.action_refresh) {
             webView.reload();
+            return true;
+        } else if (id == R.id.action_instagram_login) {
+            showInstagramLoginDialog();
             return true;
         } else if (id == R.id.action_change_url) {
             showServerConfigDialog();
