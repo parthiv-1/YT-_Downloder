@@ -91,6 +91,11 @@ public class MainActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
+                String current = webView.getUrl();
+                if (current != null && current.contains("instagram.com")) {
+                    loadActiveUrl();
+                    return;
+                }
                 if (webView.canGoBack()) {
                     webView.goBack();
                 } else {
@@ -145,6 +150,15 @@ public class MainActivity extends AppCompatActivity {
                 layoutError.setVisibility(View.GONE);
                 webView.setVisibility(View.VISIBLE);
 
+                if (url != null && url.contains("instagram.com")) {
+                    String cookies = CookieManager.getInstance().getCookie("https://www.instagram.com");
+                    if (cookies != null && cookies.contains("sessionid")) {
+                        syncCookiesToServer(cookies);
+                        loadActiveUrl();
+                        return;
+                    }
+                }
+
                 if (pendingSharedUrl != null) {
                     injectSharedUrl(pendingSharedUrl);
                     pendingSharedUrl = null;
@@ -154,10 +168,13 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
-                    swipeRefresh.setRefreshing(false);
-                    webView.setVisibility(View.GONE);
-                    layoutError.setVisibility(View.VISIBLE);
-                    txtCurrentServer.setText("Could not reach:\n" + getServerUrl());
+                    String reqUrl = request.getUrl().toString();
+                    if (reqUrl.startsWith(getServerUrl())) {
+                        swipeRefresh.setRefreshing(false);
+                        webView.setVisibility(View.GONE);
+                        layoutError.setVisibility(View.VISIBLE);
+                        txtCurrentServer.setText("Could not reach:\n" + getServerUrl());
+                    }
                 }
             }
         });
@@ -306,39 +323,23 @@ public class MainActivity extends AppCompatActivity {
     public class AndroidBridge {
         @JavascriptInterface
         public void openInstagramLogin() {
-            runOnUiThread(() -> showInstagramLoginDialog());
+            runOnUiThread(() -> startInstagramLogin());
         }
     }
 
-    private void showInstagramLoginDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle(R.string.action_instagram_login);
-
-        WebView igWebView = new WebView(this);
-        WebSettings ws = igWebView.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setDomStorageEnabled(true);
-        ws.setDatabaseEnabled(true);
-        ws.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
-
-        AlertDialog dialog = builder.setView(igWebView)
-                .setNegativeButton(R.string.server_dialog_cancel, (d, w) -> d.dismiss())
-                .create();
-
-        igWebView.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                String cookie = CookieManager.getInstance().getCookie("https://www.instagram.com");
-                if (cookie != null && cookie.contains("sessionid")) {
-                    syncCookiesToServer(cookie);
-                    dialog.dismiss();
-                }
-            }
-        });
-
-        igWebView.loadUrl("https://www.instagram.com/accounts/login/");
-        dialog.show();
+    private void startInstagramLogin() {
+        Toast.makeText(this, "Opening Instagram Login...", Toast.LENGTH_SHORT).show();
+        layoutError.setVisibility(View.GONE);
+        webView.setVisibility(View.VISIBLE);
+        WebSettings settings = webView.getSettings();
+        settings.setDomStorageEnabled(true);
+        settings.setDatabaseEnabled(true);
+        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
+        CookieManager.getInstance().setAcceptCookie(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
+        }
+        webView.loadUrl("https://www.instagram.com/accounts/login/");
     }
 
     private void syncCookiesToServer(String cookies) {
@@ -389,7 +390,7 @@ public class MainActivity extends AppCompatActivity {
             webView.reload();
             return true;
         } else if (id == R.id.action_instagram_login) {
-            showInstagramLoginDialog();
+            startInstagramLogin();
             return true;
         } else if (id == R.id.action_change_url) {
             showServerConfigDialog();
