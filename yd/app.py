@@ -834,19 +834,34 @@ def api_set_cookies():
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     cookie_path = os.path.join(DOWNLOADS_DIR, "env_cookies.txt")
 
-    # If user provided raw sessionid or cookie string
+    # If user provided raw sessionid or semicolon-delimited cookie string
     if not raw_val.startswith("# Netscape") and "\t" not in raw_val:
-        clean_sid = raw_val.replace("sessionid=", "").strip().strip(";").strip()
-        cookie_content = (
-            "# Netscape HTTP Cookie File\n"
-            f".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{clean_sid}\n"
-        )
+        if ";" in raw_val:
+            lines = ["# Netscape HTTP Cookie File", "# https://curl.haxx.se/rfc/cookie_spec.html", ""]
+            for p in raw_val.split(";"):
+                if "=" in p:
+                    k, v = p.strip().split("=", 1)
+                    if k.strip():
+                        lines.append(f".instagram.com\tTRUE\t/\tTRUE\t2147483647\t{k.strip()}\t{v.strip()}")
+            cookie_content = "\n".join(lines) + "\n"
+        else:
+            clean_sid = raw_val.replace("sessionid=", "").strip().strip(";").strip()
+            cookie_content = (
+                "# Netscape HTTP Cookie File\n"
+                f".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{clean_sid}\n"
+            )
     else:
         cookie_content = raw_val
 
     try:
         with open(cookie_path, "w", encoding="utf-8") as f:
             f.write(cookie_content)
+        # Also mirror to BASE_DIR and project root cookies.txt
+        try:
+            with open(os.path.join(BASE_DIR, "cookies.txt"), "w", encoding="utf-8") as f:
+                f.write(cookie_content)
+        except Exception:
+            pass
         return jsonify({"success": True, "message": "Instagram cookies saved! 18+ Reels are now unlocked."})
     except Exception as e:
         return jsonify({"error": f"Failed to save cookies: {str(e)}"}), 500
