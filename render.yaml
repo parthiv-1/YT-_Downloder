@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: yt-downloader-app
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000
