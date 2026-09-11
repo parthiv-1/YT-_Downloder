@@ -139,20 +139,17 @@ DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
 
 
 def get_best_cookie_file() -> str | None:
-    """Find the most relevant cookie file in the downloads folder or read from env."""
-    # Check if cookies are set in environment variables
-    env_cookies = os.environ.get("YOUTUBE_COOKIES")
+    """Find the most relevant cookie file in downloads, yd, or project root, or from environment variables."""
+    # Check if cookies are set in environment variables (for cloud deployments like Render / Railway)
+    env_cookies = os.environ.get("YOUTUBE_COOKIES") or os.environ.get("INSTAGRAM_COOKIES") or os.environ.get("COOKIES_TXT")
     if env_cookies:
         os.makedirs(DOWNLOADS_DIR, exist_ok=True)
         cookie_path = os.path.join(DOWNLOADS_DIR, "env_cookies.txt")
         try:
             content = env_cookies.strip()
-            # Try base64 decoding to handle Railway multiline environment variable pasting issues
             import base64
             try:
-                # Strip spaces and newlines if they are present in base64 string
                 clean_b64 = content.replace(" ", "").replace("\n", "").replace("\r", "")
-                # Add padding if missing
                 clean_b64 += "=" * ((4 - len(clean_b64) % 4) % 4)
                 decoded = base64.b64decode(clean_b64).decode("utf-8")
                 if "cookie" in decoded.lower() or "# netscape" in decoded.lower() or "\t" in decoded:
@@ -167,26 +164,30 @@ def get_best_cookie_file() -> str | None:
         except Exception as e:
             print(f"  [Cookies] Error writing cookies from environment: {e}")
 
-    if not os.path.isdir(DOWNLOADS_DIR):
-        return None
-
-    # Priority order for cookie file names
+    # Search paths in order: downloads, yd, and project root
+    search_dirs = [
+        DOWNLOADS_DIR,
+        BASE_DIR,
+        os.path.dirname(BASE_DIR),
+    ]
     variants = [
         "cookies.txt",
-        "cookies (4).txt",
-        "cookies (3).txt",
-        "cookies (2).txt",
+        "instagram_cookies.txt",
         "cookies (1).txt",
+        "cookies (2).txt",
     ]
-    for v in variants:
-        path = os.path.join(DOWNLOADS_DIR, v)
-        if os.path.isfile(path):
-            return path
+    for d in search_dirs:
+        if os.path.isdir(d):
+            for v in variants:
+                path = os.path.join(d, v)
+                if os.path.isfile(path):
+                    return path
 
-    # Fallback: find any .txt file that looks like a cookie file
-    for fname in os.listdir(DOWNLOADS_DIR):
-        if fname.endswith(".txt") and "cookie" in fname.lower():
-            return os.path.join(DOWNLOADS_DIR, fname)
+    for d in search_dirs:
+        if os.path.isdir(d):
+            for fname in os.listdir(d):
+                if fname.endswith(".txt") and "cookie" in fname.lower():
+                    return os.path.join(d, fname)
     return None
 
 
@@ -412,18 +413,27 @@ def get_video_info(url: str) -> tuple[dict, dict]:
 
     # Instagram: use simple direct extraction with cookie fallback
     if platform == "instagram":
-        # First try: no cookies (public content)
-        # Second try: cookies from Chrome browser (logged-in content)
-        # Third try: cookies from Firefox browser
+        # Strategy 1: Public request with standard browser headers
         ig_strategies = [
-            {**base_opts},  # No cookies
-            {**base_opts, "cookiesfrombrowser": ("chrome",)},   # Chrome cookies
-            {**base_opts, "cookiesfrombrowser": ("firefox",)},  # Firefox cookies
+            {
+                **base_opts,
+                "http_headers": {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Sec-Fetch-Mode": "navigate",
+                },
+            }
         ]
-        # Also check for manual cookies.txt
+        # If cookies are provided (via file or environment variable), prioritize them
         current_cookie = get_best_cookie_file()
         if current_cookie:
-            ig_strategies.insert(1, {**base_opts, "cookiefile": current_cookie})
+            ig_strategies.insert(0, {**base_opts, "cookiefile": current_cookie})
+
+        # Only on Windows (local PC) can we probe desktop browser cookies. Never on Linux/Docker!
+        if os.name == "nt":
+            ig_strategies.append({**base_opts, "cookiesfrombrowser": ("chrome",)})
+            ig_strategies.append({**base_opts, "cookiesfrombrowser": ("firefox",)})
 
         last_ig_exc = None
         info = None
@@ -434,12 +444,22 @@ def get_video_info(url: str) -> tuple[dict, dict]:
                 print(f"  [Instagram] Successfully extracted info.")
                 break
             except Exception as e:
-                last_ig_exc = e
-                print(f"  [Instagram] Strategy failed: {str(e)[:80]}, trying next...")
+                err_str = str(e)
+                print(f"  [Instagram] Strategy failed: {err_str[:80]}, trying next...")
+                # Filter out missing local browser database errors so the user sees the real Instagram reason
+                if "could not find" not in err_str.lower() and "database" not in err_str.lower():
+                    last_ig_exc = e
+                elif last_ig_exc is None:
+                    last_ig_exc = e
                 continue
 
         if info is None:
-            raise last_ig_exc if last_ig_exc else Exception("Failed to fetch Instagram reel info.")
+            if last_ig_exc:
+                err_msg = str(last_ig_exc)
+                if "can't be seen by certain audiences" in err_msg or "isn't available to everyone" in err_msg:
+                    raise ValueError("This Instagram Reel is restricted (Age 18+ or requires Instagram login).")
+                raise last_ig_exc
+            raise Exception("Failed to fetch Instagram reel info.")
 
         hint = {"cookie_idx": 0, "config_idx": 0}
     else:
@@ -669,15 +689,25 @@ def _download_worker(
             platform = detect_platform(url)
 
             if platform == "instagram":
-                # Instagram download: try without cookies, then with browser cookies
+                # Instagram download: try with browser headers, then cookies
                 ig_dl_strategies = [
-                    {**base_opts},
-                    {**base_opts, "cookiesfrombrowser": ("chrome",)},
-                    {**base_opts, "cookiesfrombrowser": ("firefox",)},
+                    {
+                        **base_opts,
+                        "http_headers": {
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Sec-Fetch-Mode": "navigate",
+                        },
+                    }
                 ]
                 current_cookie = get_best_cookie_file()
                 if current_cookie:
-                    ig_dl_strategies.insert(1, {**base_opts, "cookiefile": current_cookie})
+                    ig_dl_strategies.insert(0, {**base_opts, "cookiefile": current_cookie})
+
+                if os.name == "nt":
+                    ig_dl_strategies.append({**base_opts, "cookiesfrombrowser": ("chrome",)})
+                    ig_dl_strategies.append({**base_opts, "cookiesfrombrowser": ("firefox",)})
 
                 last_dl_exc = None
                 info = None
@@ -688,12 +718,21 @@ def _download_worker(
                         print(f"  [Instagram Download] Success.")
                         break
                     except Exception as e:
-                        last_dl_exc = e
-                        print(f"  [Instagram Download] Strategy failed: {str(e)[:80]}, trying next...")
+                        err_str = str(e)
+                        print(f"  [Instagram Download] Strategy failed: {err_str[:80]}, trying next...")
+                        if "could not find" not in err_str.lower() and "database" not in err_str.lower():
+                            last_dl_exc = e
+                        elif last_dl_exc is None:
+                            last_dl_exc = e
                         continue
 
                 if info is None:
-                    raise last_dl_exc if last_dl_exc else Exception("Instagram download failed.")
+                    if last_dl_exc:
+                        err_msg = str(last_dl_exc)
+                        if "can't be seen by certain audiences" in err_msg or "isn't available to everyone" in err_msg:
+                            raise ValueError("This Instagram Reel is restricted (Age 18+ or requires Instagram login).")
+                        raise last_dl_exc
+                    raise Exception("Instagram download failed.")
             else:
                 info, _ = _extract_with_cookie_fallback(
                     base_opts, url, download=True, hint=hint
