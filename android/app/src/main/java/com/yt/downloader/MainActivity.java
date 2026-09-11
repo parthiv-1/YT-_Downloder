@@ -43,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
 
     private static final String PREFS_NAME = "YtDownloaderPrefs";
     private static final String KEY_SERVER_URL = "server_url";
-    private static final String DEFAULT_URL = "http://192.168.1.15:5000";
+    private static final String DEFAULT_URL = "https://yt-downloader-app-13s4.onrender.com";
 
     private static final int PERMISSION_REQUEST_STORAGE = 101;
     private static final int PERMISSION_REQUEST_NOTIF = 102;

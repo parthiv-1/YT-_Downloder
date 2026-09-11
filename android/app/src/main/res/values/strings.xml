@@ -3,7 +3,7 @@
     <string name="action_refresh">Refresh</string>
     <string name="action_change_url">Server Settings</string>
     <string name="server_dialog_title">Server Address</string>
-    <string name="server_dialog_hint">http://192.168.1.15:5000 or https://...</string>
+    <string name="server_dialog_hint">https://yt-downloader-app-13s4.onrender.com</string>
     <string name="server_dialog_save">Connect</string>
     <string name="server_dialog_cancel">Cancel</string>
     <string name="loading_text">Connecting to Downloader Server...</string>
