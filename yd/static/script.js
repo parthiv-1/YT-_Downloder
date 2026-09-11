@@ -537,6 +537,59 @@ mp3DownloadBtn.addEventListener("click", () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+// Cookie Modal for 18+ Reels
+// ─────────────────────────────────────────────────────────────
+
+const btnOpenCookieModal = document.getElementById("btn-open-cookie-modal");
+const btnCloseCookieModal = document.getElementById("btn-close-cookie-modal");
+const btnCancelCookieModal = document.getElementById("btn-cancel-cookie-modal");
+const btnSaveCookie = document.getElementById("btn-save-cookie");
+const cookieModal = document.getElementById("cookie-modal");
+const modalBackdrop = document.getElementById("modal-backdrop");
+const cookieInput = document.getElementById("cookie-input");
+
+function toggleCookieModal(show) {
+  if (cookieModal) cookieModal.style.display = show ? "block" : "none";
+  if (modalBackdrop) modalBackdrop.style.display = show ? "block" : "none";
+  if (show && cookieInput) cookieInput.focus();
+}
+
+if (btnOpenCookieModal) btnOpenCookieModal.addEventListener("click", () => toggleCookieModal(true));
+if (btnCloseCookieModal) btnCloseCookieModal.addEventListener("click", () => toggleCookieModal(false));
+if (btnCancelCookieModal) btnCancelCookieModal.addEventListener("click", () => toggleCookieModal(false));
+if (modalBackdrop) modalBackdrop.addEventListener("click", () => toggleCookieModal(false));
+
+if (btnSaveCookie) {
+  btnSaveCookie.addEventListener("click", async () => {
+    const val = cookieInput ? cookieInput.value.trim() : "";
+    if (!val) {
+      showToast("Please enter your Instagram sessionid or cookies.", "error");
+      return;
+    }
+    btnSaveCookie.disabled = true;
+    try {
+      const res = await fetch("/api/set-cookies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cookies: val }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast("🎉 " + data.message, "success", 4000);
+        toggleCookieModal(false);
+        if (cookieInput) cookieInput.value = "";
+      } else {
+        showToast(data.error || "Failed to save cookies.", "error");
+      }
+    } catch (e) {
+      showToast("Network error: " + e.message, "error");
+    } finally {
+      btnSaveCookie.disabled = false;
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────────
 

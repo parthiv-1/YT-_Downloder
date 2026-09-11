@@ -819,6 +819,39 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/set-cookies", methods=["POST"])
+def api_set_cookies():
+    """
+    POST /api/set-cookies
+    Body: { "cookies": "<sessionid or netscape cookie text>" }
+    Saves the cookie to enable 18+ and restricted Instagram reel downloads.
+    """
+    data = request.get_json(silent=True) or {}
+    raw_val = data.get("cookies", "").strip()
+    if not raw_val:
+        return jsonify({"error": "Please provide your Instagram sessionid or cookies text."}), 400
+
+    os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+    cookie_path = os.path.join(DOWNLOADS_DIR, "env_cookies.txt")
+
+    # If user provided raw sessionid or cookie string
+    if not raw_val.startswith("# Netscape") and "\t" not in raw_val:
+        clean_sid = raw_val.replace("sessionid=", "").strip().strip(";").strip()
+        cookie_content = (
+            "# Netscape HTTP Cookie File\n"
+            f".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{clean_sid}\n"
+        )
+    else:
+        cookie_content = raw_val
+
+    try:
+        with open(cookie_path, "w", encoding="utf-8") as f:
+            f.write(cookie_content)
+        return jsonify({"success": True, "message": "Instagram cookies saved! 18+ Reels are now unlocked."})
+    except Exception as e:
+        return jsonify({"error": f"Failed to save cookies: {str(e)}"}), 500
+
+
 @app.route("/api/info", methods=["POST"])
 def api_info():
     """
