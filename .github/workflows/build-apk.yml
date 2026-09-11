@@ -10,6 +10,9 @@ jobs:
     name: Build APK
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -33,10 +36,23 @@ jobs:
           yes | sdkmanager --licenses || true
           cd android
           gradle assembleDebug --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk ../YT-Downloader.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: YouTube-Downloader-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: YT-Downloader.apk
           retention-days: 30
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "YouTube & Instagram Downloader (Latest APK)"
+          body: "Direct 1-tap download of the latest Android APK with cloud support and in-app 18+ Reels unlock."
+          draft: false
+          prerelease: false
+          files: YT-Downloader.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
