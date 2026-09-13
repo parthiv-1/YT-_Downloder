@@ -140,7 +140,27 @@ DOWNLOADS_DIR = os.path.join(BASE_DIR, "downloads")
 
 def get_best_cookie_file() -> str | None:
     """Find the most relevant cookie file in downloads, yd, or project root, or from environment variables."""
-    # Check if cookies are set in environment variables (for cloud deployments like Render / Railway)
+    # 1. Search local repository files first (cookies.txt in yd, root, or downloads)
+    search_dirs = [
+        DOWNLOADS_DIR,
+        BASE_DIR,
+        os.path.dirname(BASE_DIR),
+    ]
+    variants = [
+        "cookies.txt",
+        "env_cookies.txt",
+        "instagram_cookies.txt",
+        "cookies (1).txt",
+        "cookies (2).txt",
+    ]
+    for d in search_dirs:
+        if os.path.isdir(d):
+            for v in variants:
+                path = os.path.join(d, v)
+                if os.path.isfile(path) and os.path.getsize(path) > 50:
+                    return path
+
+    # 2. Check environment variables as fallback if no local file exists
     env_cookies = os.environ.get("YOUTUBE_COOKIES") or os.environ.get("INSTAGRAM_COOKIES") or os.environ.get("COOKIES_TXT")
     if env_cookies:
         os.makedirs(DOWNLOADS_DIR, exist_ok=True)
@@ -164,31 +184,24 @@ def get_best_cookie_file() -> str | None:
         except Exception as e:
             print(f"  [Cookies] Error writing cookies from environment: {e}")
 
-    # Search paths in order: downloads, yd, and project root
-    search_dirs = [
-        DOWNLOADS_DIR,
-        BASE_DIR,
-        os.path.dirname(BASE_DIR),
-    ]
-    variants = [
-        "cookies.txt",
-        "instagram_cookies.txt",
-        "cookies (1).txt",
-        "cookies (2).txt",
-    ]
-    for d in search_dirs:
-        if os.path.isdir(d):
-            for v in variants:
-                path = os.path.join(d, v)
-                if os.path.isfile(path):
-                    return path
-
     for d in search_dirs:
         if os.path.isdir(d):
             for fname in os.listdir(d):
                 if fname.endswith(".txt") and "cookie" in fname.lower():
                     return os.path.join(d, fname)
     return None
+
+
+@app.route("/api/version")
+def api_version():
+    cf = get_best_cookie_file()
+    return jsonify({
+        "version": "1.4.1",
+        "status": "ready",
+        "cookie_file": os.path.basename(cf) if cf else None,
+        "ffmpeg": HAS_FFMPEG,
+        "node": bool(_NODE_PATH and os.path.isfile(_NODE_PATH)),
+    })
 
 
 # Initial path (can be updated dynamically)
