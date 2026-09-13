@@ -398,6 +398,7 @@ def get_video_info(url: str) -> tuple[dict, dict]:
         "noplaylist": not is_story,
         "socket_timeout": 15,
         "check_formats": False,
+        "format": "all",
     }
 
     # Instagram: use simple direct extraction with cookie fallback
