@@ -423,19 +423,26 @@ def get_video_info(url: str) -> tuple[dict, dict]:
     Supports YouTube and Instagram URLs.
     """
     platform = detect_platform(url)
+    is_story = "stories" in url.lower()
     base_opts = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
-        "noplaylist": True,
+        "noplaylist": not is_story,
         "socket_timeout": 15,
         "check_formats": False,
     }
 
     # Instagram: use simple direct extraction with cookie fallback
     if platform == "instagram":
-        # Strategy 1: Public request with standard browser headers
-        ig_strategies = [
+        # Strategy 1: If cookies are provided, prioritize them (essential for Stories & 18+ Reels)
+        ig_strategies = []
+        current_cookie = get_best_cookie_file()
+        if current_cookie:
+            ig_strategies.append({**base_opts, "cookiefile": current_cookie})
+
+        # Strategy 2: Standard browser request
+        ig_strategies.append(
             {
                 **base_opts,
                 "http_headers": {
@@ -445,11 +452,7 @@ def get_video_info(url: str) -> tuple[dict, dict]:
                     "Sec-Fetch-Mode": "navigate",
                 },
             }
-        ]
-        # If cookies are provided (via file or environment variable), prioritize them
-        current_cookie = get_best_cookie_file()
-        if current_cookie:
-            ig_strategies.insert(0, {**base_opts, "cookiefile": current_cookie})
+        )
 
         last_ig_exc = None
         info = None
@@ -472,10 +475,24 @@ def get_video_info(url: str) -> tuple[dict, dict]:
         if info is None:
             if last_ig_exc:
                 err_msg = str(last_ig_exc)
-                if "can't be seen by certain audiences" in err_msg or "isn't available to everyone" in err_msg:
-                    raise ValueError("This Instagram Reel is restricted (Age 18+ or requires Instagram login).")
+                if "can't be seen by certain audiences" in err_msg or "isn't available to everyone" in err_msg or "login" in err_msg.lower():
+                    raise ValueError("This Instagram Reel or Story requires Instagram login. Please update Instagram cookies.")
                 raise last_ig_exc
-            raise Exception("Failed to fetch Instagram reel info.")
+            raise Exception("Failed to fetch Instagram reel/story info.")
+
+        # Unpack Instagram Story or Highlight playlist into target single story item
+        if info and "entries" in info:
+            entries = [e for e in info.get("entries", []) if e]
+            if entries:
+                m = re.search(r"/stories/[^/]+/(\d+)", url)
+                target_entry = None
+                if m:
+                    target_id = m.group(1)
+                    for e in entries:
+                        if str(e.get("id")) == target_id or str(e.get("pk")) == target_id:
+                            target_entry = e
+                            break
+                info = target_entry or entries[0]
 
         hint = {"cookie_idx": 0, "config_idx": 0}
     else:
@@ -675,7 +692,7 @@ def _download_worker(
             "quiet": False,
             "no_warnings": False,
             "verbose": False,  # Flip to True for deep debugging
-            "noplaylist": True,
+            "noplaylist": not ("stories" in url.lower()),
             "progress_hooks": [progress_hook],
             # ── Timeout & Retry Settings ──────────────────────────
             "socket_timeout": 30,
@@ -705,8 +722,13 @@ def _download_worker(
             platform = detect_platform(url)
 
             if platform == "instagram":
-                # Instagram download: try with browser headers, then cookies
-                ig_dl_strategies = [
+                # Instagram download: try with cookies first (essential for Stories & 18+ Reels)
+                ig_dl_strategies = []
+                current_cookie = get_best_cookie_file()
+                if current_cookie:
+                    ig_dl_strategies.append({**base_opts, "cookiefile": current_cookie})
+
+                ig_dl_strategies.append(
                     {
                         **base_opts,
                         "http_headers": {
@@ -716,10 +738,7 @@ def _download_worker(
                             "Sec-Fetch-Mode": "navigate",
                         },
                     }
-                ]
-                current_cookie = get_best_cookie_file()
-                if current_cookie:
-                    ig_dl_strategies.insert(0, {**base_opts, "cookiefile": current_cookie})
+                )
 
                 last_dl_exc = None
                 info = None
