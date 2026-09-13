@@ -142,14 +142,14 @@ def get_best_cookie_file() -> str | None:
     """Find the most relevant cookie file in downloads, yd, or project root, or from environment variables."""
     # 1. Search local repository files first (cookies.txt in yd, root, or downloads)
     search_dirs = [
-        DOWNLOADS_DIR,
         BASE_DIR,
         os.path.dirname(BASE_DIR),
+        DOWNLOADS_DIR,
     ]
     variants = [
         "cookies.txt",
-        "env_cookies.txt",
         "instagram_cookies.txt",
+        "env_cookies.txt",
         "cookies (1).txt",
         "cookies (2).txt",
     ]
