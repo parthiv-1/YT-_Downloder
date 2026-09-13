@@ -215,15 +215,15 @@
 <!-- ── Cookie Unlock Modal ── -->
 <div id="cookie-modal" class="card" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 90%; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.7); backdrop-filter: blur(25px); border: 1px solid rgba(255,255,255,0.25); background: rgba(15, 23, 42, 0.95); padding: 20px; border-radius: 16px;">
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-    <h3 style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; color: #fff;">
+    <h3 id="cookie-modal-title" style="margin: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; color: #fff;">
       <i data-feather="lock" style="width: 18px; color: #fcb045;"></i> Unlock 18+ Reels
     </h3>
     <button id="btn-close-cookie-modal" type="button" style="background: none; border: none; color: #fff; cursor: pointer; font-size: 1.4rem; line-height: 1;">&times;</button>
   </div>
-  <p style="font-size: 0.82rem; color: rgba(255,255,255,0.75); margin-bottom: 12px; line-height: 1.4;">
+  <p id="cookie-modal-desc" style="font-size: 0.82rem; color: rgba(255,255,255,0.75); margin-bottom: 12px; line-height: 1.4;">
     Instagram requires an account to view 18+ or restricted reels. Paste your Instagram <strong>sessionid</strong> below to unlock them:
   </p>
-  <textarea id="cookie-input" rows="3" placeholder="Paste sessionid (e.g. 68291... or full cookies) here..." style="width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); color: #fff; padding: 10px; font-size: 0.85rem; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
+  <textarea id="cookie-input" rows="3" placeholder="Paste sessionid or cookies here..." style="width: 100%; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.4); color: #fff; padding: 10px; font-size: 0.85rem; resize: vertical; box-sizing: border-box; outline: none;"></textarea>
   <div style="display: flex; gap: 10px; margin-top: 14px;">
     <button id="btn-save-cookie" type="button" class="btn btn-primary" style="flex: 1; padding: 8px 14px;">
       <span>Save &amp; Unlock</span>

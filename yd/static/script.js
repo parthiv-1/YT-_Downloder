@@ -547,12 +547,37 @@ const btnSaveCookie = document.getElementById("btn-save-cookie");
 const cookieModal = document.getElementById("cookie-modal");
 const modalBackdrop = document.getElementById("modal-backdrop");
 const cookieInput = document.getElementById("cookie-input");
+const cookieModalTitle = document.getElementById("cookie-modal-title");
+const cookieModalDesc = document.getElementById("cookie-modal-desc");
 
-function toggleCookieModal(show) {
+let currentCookieMode = "instagram"; // "instagram" | "youtube"
+
+function toggleCookieModal(show, mode = "instagram") {
+  currentCookieMode = mode;
   if (cookieModal) cookieModal.style.display = show ? "block" : "none";
   if (modalBackdrop) modalBackdrop.style.display = show ? "block" : "none";
-  if (show && cookieInput) cookieInput.focus();
+  if (show) {
+    if (cookieModalTitle) {
+      cookieModalTitle.innerHTML = mode === "youtube"
+        ? '<i data-feather="youtube" style="width: 18px; color: #ef4444;"></i> Unlock YouTube 4K / 2K'
+        : '<i data-feather="lock" style="width: 18px; color: #fcb045;"></i> Unlock 18+ Reels';
+    }
+    if (cookieModalDesc) {
+      cookieModalDesc.innerHTML = mode === "youtube"
+        ? 'YouTube requires account verification for 4K/2K on cloud servers. Paste your YouTube cookies below:'
+        : 'Instagram requires an account to view 18+ or restricted reels. Paste your Instagram <strong>sessionid</strong> below:';
+    }
+    if (cookieInput) {
+      cookieInput.placeholder = mode === "youtube"
+        ? "Paste Netscape cookies or YouTube header string (LOGIN_INFO=...; SAPISID=...)..."
+        : "Paste sessionid or cookies here...";
+      cookieInput.focus();
+    }
+    if (window.feather) feather.replace();
+  }
 }
+
+
 
 if (btnOpenCookieModal) {
   btnOpenCookieModal.addEventListener("click", () => {
@@ -560,7 +585,7 @@ if (btnOpenCookieModal) {
       window.AndroidApp.openInstagramLogin();
       return;
     }
-    toggleCookieModal(true);
+    toggleCookieModal(true, "instagram");
   });
 }
 if (btnCloseCookieModal) btnCloseCookieModal.addEventListener("click", () => toggleCookieModal(false));
@@ -571,7 +596,7 @@ if (btnSaveCookie) {
   btnSaveCookie.addEventListener("click", async () => {
     const val = cookieInput ? cookieInput.value.trim() : "";
     if (!val) {
-      showToast("Please enter your Instagram sessionid or cookies.", "error");
+      showToast("Please enter cookie data.", "error");
       return;
     }
     btnSaveCookie.disabled = true;
@@ -579,7 +604,7 @@ if (btnSaveCookie) {
       const res = await fetch("/api/set-cookies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cookies: val }),
+        body: JSON.stringify({ cookies: val, platform: currentCookieMode }),
       });
       const data = await res.json();
       if (res.ok && data.success) {

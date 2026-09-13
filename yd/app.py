@@ -267,23 +267,29 @@ def _extract_with_cookie_fallback(
 
     configs = [
         {
-            # web: generates session-signed URLs via cookies — most reliable, avoids 403
-            "name": "Web (Session-Signed)",
+            # web: generates session-signed URLs via cookies — most reliable for 4K (2160p) and 2K (1440p)
+            "name": "Web (Session-Signed 4K/2K)",
             "clients": ["web"],
             "headers": {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
             },
         },
         {
-            # tv_embedded: good for 4K, bypasses some restrictions
-            "name": "TV Embedded",
-            "clients": ["tv_embedded"],
+            # tv: good for 4K/2K DASH formats, avoids many web botguard restrictions
+            "name": "TV Client (4K/2K)",
+            "clients": ["tv"],
             "headers": {},
         },
         {
-            # android_vr: 4K capable but unsigned URLs can expire (403 mid-download)
+            # android_vr: 4K capable DASH client
             "name": "4K Mode (android_vr)",
             "clients": ["android_vr"],
+            "headers": {},
+        },
+        {
+            # ios: most reliable bypass for cloud/datacenter IP bot check
+            "name": "iOS Client",
+            "clients": ["ios"],
             "headers": {},
         },
         {
@@ -295,7 +301,7 @@ def _extract_with_cookie_fallback(
             },
         },
         {
-            # android: reliable fallback, avoids SABR issues on most videos
+            # android: reliable fallback client
             "name": "Android Fallback",
             "clients": ["android"],
             "headers": {},
@@ -339,6 +345,8 @@ def _extract_with_cookie_fallback(
                 print(f"  [Hint Failed] {str(e)[:100]}... falling back to full scan.")
 
     last_exc: Exception | None = None
+    best_fallback_info: dict | None = None
+    best_fallback_hint: dict | None = None
 
     for s_idx, cookie_opt in enumerate(strategies):
         c_label = (
@@ -360,10 +368,6 @@ def _extract_with_cookie_fallback(
                     }
                 }
 
-                # Forced Node.js runtime for n-challenge solving
-                # Let yt-dlp automatically detect Node.js/Deno from PATH
-                pass
-
                 if cfg["headers"]:
                     opts["http_headers"] = cfg["headers"]
 
@@ -373,14 +377,26 @@ def _extract_with_cookie_fallback(
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     info = ydl.extract_info(url, download=download)
 
-                # Quality Gate: If results are only 360p or lower, try next config
-                if not download and _is_low_quality(info):
-                    print(
-                        f"  [Nuclear Warning] [{label}] only found 360p or less. Trying 4K Unlocked Mode..."
-                    )
-                    raise ValueError("low quality result")
+                # If this is metadata extraction (not download), validate available resolution quality
+                if not download:
+                    formats = info.get("formats", [])
+                    max_height = max([f.get("height") or 0 for f in formats] or [0])
+                    print(f"  [Scan] [{label}] found {len(formats)} formats (max height: {max_height}p)")
 
-                print(f"  [Absolute Success] Found high-quality formats via [{label}]")
+                    # If 720p or higher (1080p, 2K, 4K) is found, return immediately!
+                    if max_height >= 720:
+                        print(f"  [Absolute Success] Found high-quality formats ({max_height}p) via [{label}]")
+                        return info, {"cookie_idx": s_idx, "config_idx": c_idx}
+                    else:
+                        # Keep track of the best working client in case higher is blocked
+                        current_best_height = max([f.get("height") or 0 for f in (best_fallback_info.get("formats", []) if best_fallback_info else [])] or [0])
+                        if best_fallback_info is None or max_height > current_best_height:
+                            best_fallback_info = info
+                            best_fallback_hint = {"cookie_idx": s_idx, "config_idx": c_idx}
+                        continue
+
+                # When download=True, if extraction succeeded, return it immediately
+                print(f"  [Absolute Success] Download extraction via [{label}]")
                 return info, {"cookie_idx": s_idx, "config_idx": c_idx}
 
             except Exception as exc:
@@ -390,6 +406,11 @@ def _extract_with_cookie_fallback(
                     f"  [Warning] [{label}] failed ({str(exc)[:80]}) — attempting next Compatibility Mode..."
                 )
                 continue
+
+    # If any format was successfully found, return the best available rather than crashing
+    if best_fallback_info is not None:
+        print(f"  [Fallback Success] Returning best available formats discovered during scan.")
+        return best_fallback_info, best_fallback_hint
 
     # All strategies and clients failed
     raise last_exc if last_exc else Exception("All extraction strategies failed.")
@@ -429,11 +450,6 @@ def get_video_info(url: str) -> tuple[dict, dict]:
         current_cookie = get_best_cookie_file()
         if current_cookie:
             ig_strategies.insert(0, {**base_opts, "cookiefile": current_cookie})
-
-        # Only on Windows (local PC) can we probe desktop browser cookies. Never on Linux/Docker!
-        if os.name == "nt":
-            ig_strategies.append({**base_opts, "cookiesfrombrowser": ("chrome",)})
-            ig_strategies.append({**base_opts, "cookiesfrombrowser": ("firefox",)})
 
         last_ig_exc = None
         info = None
@@ -705,10 +721,6 @@ def _download_worker(
                 if current_cookie:
                     ig_dl_strategies.insert(0, {**base_opts, "cookiefile": current_cookie})
 
-                if os.name == "nt":
-                    ig_dl_strategies.append({**base_opts, "cookiesfrombrowser": ("chrome",)})
-                    ig_dl_strategies.append({**base_opts, "cookiesfrombrowser": ("firefox",)})
-
                 last_dl_exc = None
                 info = None
                 for ig_dl_opts in ig_dl_strategies:
@@ -819,50 +831,127 @@ def index():
     return render_template("index.html")
 
 
+def _parse_cookie_lines_to_dict(text: str) -> dict[str, str]:
+    """Parse Netscape cookie format lines into {domain::name: full_line} for seamless merging."""
+    cookie_map = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) >= 7:
+            domain = parts[0]
+            name = parts[5]
+            cookie_map[f"{domain}::{name}"] = line
+    return cookie_map
+
+
 @app.route("/api/set-cookies", methods=["POST"])
 def api_set_cookies():
     """
     POST /api/set-cookies
-    Body: { "cookies": "<sessionid or netscape cookie text>" }
-    Saves the cookie to enable 18+ and restricted Instagram reel downloads.
+    Body: { "cookies": "<sessionid or cookies string or netscape text>", "platform": "youtube" | "instagram" }
+    Saves and merges cookies to enable 18+ Reels and YouTube 4K/2K downloads.
     """
     data = request.get_json(silent=True) or {}
     raw_val = data.get("cookies", "").strip()
+    platform = (data.get("platform") or "").lower().strip()
+
     if not raw_val:
-        return jsonify({"error": "Please provide your Instagram sessionid or cookies text."}), 400
+        return jsonify({"error": "Please provide cookie data."}), 400
 
     os.makedirs(DOWNLOADS_DIR, exist_ok=True)
     cookie_path = os.path.join(DOWNLOADS_DIR, "env_cookies.txt")
 
-    # If user provided raw sessionid or semicolon-delimited cookie string
-    if not raw_val.startswith("# Netscape") and "\t" not in raw_val:
-        if ";" in raw_val:
-            lines = ["# Netscape HTTP Cookie File", "# https://curl.haxx.se/rfc/cookie_spec.html", ""]
+    # Read existing cookies if available to merge
+    existing_text = ""
+    current_best = get_best_cookie_file()
+    if current_best and os.path.isfile(current_best):
+        try:
+            with open(current_best, "r", encoding="utf-8") as f:
+                existing_text = f.read()
+        except Exception:
+            pass
+
+    cookie_dict = _parse_cookie_lines_to_dict(existing_text)
+
+    # Detect platform
+    is_youtube = platform == "youtube" or any(
+        k in raw_val for k in ["LOGIN_INFO", "SAPISID", "SID=", "SSID=", "__Secure", "VISITOR_INFO"]
+    )
+
+    if raw_val.startswith("# Netscape") or "\t" in raw_val:
+        # Full Netscape file pasted
+        for line in raw_val.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split("\t")
+            if len(parts) >= 7:
+                cookie_dict[f"{parts[0]}::{parts[5]}"] = line
+    else:
+        # Header string or single token
+        if is_youtube:
+            # Semicolon-delimited cookies from YouTube / Google Login
             for p in raw_val.split(";"):
                 if "=" in p:
                     k, v = p.strip().split("=", 1)
-                    if k.strip():
-                        lines.append(f".instagram.com\tTRUE\t/\tTRUE\t2147483647\t{k.strip()}\t{v.strip()}")
-            cookie_content = "\n".join(lines) + "\n"
+                    k, v = k.strip(), v.strip()
+                    if k and v:
+                        for domain in [".youtube.com", ".google.com"]:
+                            line = f"{domain}\tTRUE\t/\tTRUE\t2147483647\t{k}\t{v}"
+                            cookie_dict[f"{domain}::{k}"] = line
         else:
-            clean_sid = raw_val.replace("sessionid=", "").strip().strip(";").strip()
-            cookie_content = (
-                "# Netscape HTTP Cookie File\n"
-                f".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{clean_sid}\n"
-            )
-    else:
-        cookie_content = raw_val
+            # Instagram cookies
+            if ";" in raw_val:
+                for p in raw_val.split(";"):
+                    if "=" in p:
+                        k, v = p.strip().split("=", 1)
+                        k, v = k.strip(), v.strip()
+                        if k and v:
+                            line = f".instagram.com\tTRUE\t/\tTRUE\t2147483647\t{k}\t{v}"
+                            cookie_dict[f".instagram.com::{k}"] = line
+            else:
+                clean_sid = raw_val.replace("sessionid=", "").strip().strip(";").strip()
+                line = f".instagram.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\t{clean_sid}"
+                cookie_dict[".instagram.com::sessionid"] = line
+
+    # Assemble unified Netscape cookie file
+    final_lines = [
+        "# Netscape HTTP Cookie File",
+        "# This file is generated by yt-dlp. Do not edit.",
+        "",
+    ]
+    final_lines.extend(cookie_dict.values())
+    cookie_content = "\n".join(final_lines) + "\n"
 
     try:
         with open(cookie_path, "w", encoding="utf-8") as f:
             f.write(cookie_content)
-        # Also mirror to BASE_DIR and project root cookies.txt
+        # Mirror to BASE_DIR and project root
         try:
             with open(os.path.join(BASE_DIR, "cookies.txt"), "w", encoding="utf-8") as f:
                 f.write(cookie_content)
+            root_cookie = os.path.join(os.path.dirname(BASE_DIR), "cookies.txt")
+            with open(root_cookie, "w", encoding="utf-8") as f:
+                f.write(cookie_content)
         except Exception:
             pass
-        return jsonify({"success": True, "message": "Instagram cookies saved! 18+ Reels are now unlocked."})
+
+        global COOKIES_TXT
+        COOKIES_TXT = cookie_path
+
+        msg = (
+            "YouTube cookies saved! 4K & 2K downloads unlocked."
+            if is_youtube
+            else "Instagram cookies saved! 18+ Reels unlocked."
+        )
+        return jsonify({
+            "success": True,
+            "message": msg,
+            "total_cookies": len(cookie_dict),
+            "is_youtube": is_youtube
+        })
     except Exception as e:
         return jsonify({"error": f"Failed to save cookies: {str(e)}"}), 500
 

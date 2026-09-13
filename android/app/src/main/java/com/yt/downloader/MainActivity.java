@@ -150,18 +150,41 @@ public class MainActivity extends AppCompatActivity {
                 layoutError.setVisibility(View.GONE);
                 webView.setVisibility(View.VISIBLE);
 
+                // Detect Render free tier spin-up page and notify the user
+                if (url != null && (url.contains("onrender.com") || url.contains("render.com"))) {
+                    webView.evaluateJavascript(
+                        "(function() { return !!(document.body && (document.body.innerText.includes('SERVICE WAKING UP') || document.body.innerText.includes('APPLICATION LOADING'))); })();",
+                        val -> {
+                            if ("true".equalsIgnoreCase(val)) {
+                                Toast.makeText(MainActivity.this, "⏳ Server is starting up (~30s)... Video will load automatically!", Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    );
+                }
+
+                // Handle Instagram Cookie Sync
                 if (url != null && url.contains("instagram.com")) {
                     String cookies = CookieManager.getInstance().getCookie("https://www.instagram.com");
                     if (cookies != null && cookies.contains("sessionid")) {
-                        syncCookiesToServer(cookies);
+                        syncCookiesToServer(cookies, "instagram");
                         loadActiveUrl();
                         return;
                     }
                 }
 
+                // Handle YouTube Cookie Sync (for 4K/2K bot bypass)
+                if (url != null && (url.contains("youtube.com") || url.contains("google.com"))) {
+                    String ytCookies = CookieManager.getInstance().getCookie("https://www.youtube.com");
+                    if (ytCookies != null && (ytCookies.contains("LOGIN_INFO") || ytCookies.contains("SAPISID") || ytCookies.contains("__Secure") || ytCookies.contains("SID="))) {
+                        syncCookiesToServer(ytCookies, "youtube");
+                        loadActiveUrl();
+                        return;
+                    }
+                }
+
+                // Inject shared URL with persistent DOM observer (do not clear here; cleared via AndroidApp.onUrlInjected)
                 if (pendingSharedUrl != null) {
                     injectSharedUrl(pendingSharedUrl);
-                    pendingSharedUrl = null;
                 }
             }
 
@@ -240,7 +263,6 @@ public class MainActivity extends AppCompatActivity {
         handleIncomingIntent(intent);
         if (pendingSharedUrl != null) {
             injectSharedUrl(pendingSharedUrl);
-            pendingSharedUrl = null;
         }
     }
 
@@ -264,17 +286,33 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    private void injectSharedUrl(String url) {
+    private void injectSharedUrl(final String url) {
         if (url == null || url.trim().isEmpty()) return;
-        String safeUrl = url.replace("'", "\\'");
-        String js = "setTimeout(function() {" +
-                "  var inp = document.getElementById('url-input') || document.querySelector('input[type=\"url\"]') || document.querySelector('input[type=\"text\"]');" +
-                "  if (inp) {" +
-                "    inp.value = '" + safeUrl + "';" +
+        final String safeUrl = url.replace("'", "\\'").replace("\n", "").replace("\r", "");
+        // Robust polling script: checks every 600ms for up to 90 seconds (survives Render spin-up)
+        String js = "(function() {" +
+                "  if (window._urlWatcherTimer) clearInterval(window._urlWatcherTimer);" +
+                "  var attempts = 0;" +
+                "  window._urlWatcherTimer = setInterval(function() {" +
+                "    attempts++;" +
+                "    var inp = document.getElementById('url-input') || document.querySelector('input[type=\"url\"]') || document.querySelector('input[type=\"text\"]');" +
                 "    var btn = document.getElementById('fetch-btn');" +
-                "    if (btn) btn.click();" +
-                "  }" +
-                "}, 600);";
+                "    if (inp && btn) {" +
+                "      clearInterval(window._urlWatcherTimer);" +
+                "      window._urlWatcherTimer = null;" +
+                "      inp.value = '" + safeUrl + "';" +
+                "      inp.dispatchEvent(new Event('input', { bubbles: true }));" +
+                "      inp.dispatchEvent(new Event('change', { bubbles: true }));" +
+                "      setTimeout(function() { btn.click(); }, 300);" +
+                "      if (window.AndroidApp && window.AndroidApp.onUrlInjected) {" +
+                "        window.AndroidApp.onUrlInjected('" + safeUrl + "');" +
+                "      }" +
+                "    } else if (attempts > 150) {" +
+                "      clearInterval(window._urlWatcherTimer);" +
+                "      window._urlWatcherTimer = null;" +
+                "    }" +
+                "  }, 600);" +
+                "})();";
         webView.evaluateJavascript(js, null);
     }
 
@@ -325,6 +363,13 @@ public class MainActivity extends AppCompatActivity {
         public void openInstagramLogin() {
             runOnUiThread(() -> startInstagramLogin());
         }
+
+        @JavascriptInterface
+        public void onUrlInjected(String url) {
+            runOnUiThread(() -> {
+                pendingSharedUrl = null;
+            });
+        }
     }
 
     private void startInstagramLogin() {
@@ -342,8 +387,9 @@ public class MainActivity extends AppCompatActivity {
         webView.loadUrl("https://www.instagram.com/accounts/login/");
     }
 
-    private void syncCookiesToServer(String cookies) {
-        Toast.makeText(this, "Syncing Instagram login...", Toast.LENGTH_SHORT).show();
+    private void syncCookiesToServer(String cookies, String platform) {
+        String readable = "Instagram";
+        Toast.makeText(this, "Syncing " + readable + " login...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 URL url = new URL(getServerUrl() + "/api/set-cookies");
@@ -356,6 +402,7 @@ public class MainActivity extends AppCompatActivity {
 
                 JSONObject json = new JSONObject();
                 json.put("cookies", cookies);
+                json.put("platform", platform);
 
                 try (OutputStream os = conn.getOutputStream()) {
                     byte[] input = json.toString().getBytes("utf-8");
