@@ -264,29 +264,24 @@ def _extract_with_cookie_fallback(
 ) -> tuple[dict, dict]:
     """
     Fast, highly-reliable extraction strategy:
-      1. Primary: Cookie-authenticated multi-client extraction (default, web, android, ios)
+      1. Primary: Cookie-authenticated default client extraction
          - Yields all resolutions up to 4K (2160p) and 2K (1440p) in 2-3 seconds.
          - Returns immediately once formats are extracted without sequential scanning.
-      2. Fallback: Unauthenticated mobile/TV client extraction (android, ios, tv)
+      2. Fallback: Android/TV client extraction
          - Bypasses cloud/datacenter IP bot blocks if cookies expire or fail.
     """
     current_cookie_file = get_best_cookie_file()
     has_cookies = bool(current_cookie_file and os.path.isfile(current_cookie_file))
 
+    # Fast strategies: 1) With cookies (if available), 2) Without cookies (bypass clients)
     strategies = []
     if has_cookies:
         strategies.append({
-            "name": "Authenticated (Cookies + Multi-Client)",
+            "name": "Authenticated (Cookies + Default)",
             "opts": {
                 **base_opts,
                 "cookiefile": current_cookie_file,
-                "extractor_args": {
-                    "youtube": {
-                        "player_client": ["default", "web", "android", "ios"],
-                        "include_dash_manifest": True,
-                        "player_skip": ["web_embedded"],
-                    }
-                },
+                "socket_timeout": 10,
                 "js_runtimes": {"node": {}},
                 "no_color": True,
                 "nocheckcertificate": True,
@@ -296,13 +291,13 @@ def _extract_with_cookie_fallback(
 
     # Fallback strategy (or primary if no cookies)
     strategies.append({
-        "name": "Unauthenticated (Android + iOS + TV Bypass)",
+        "name": "Fallback (Android + TV Bypass)",
         "opts": {
             **base_opts,
+            "socket_timeout": 10,
             "extractor_args": {
                 "youtube": {
-                    "player_client": ["android", "ios", "tv"],
-                    "include_dash_manifest": True,
+                    "player_client": ["android", "tv"],
                 }
             },
             "js_runtimes": {"node": {}},
@@ -316,7 +311,6 @@ def _extract_with_cookie_fallback(
     if hint and "cookie_idx" in hint:
         c_idx = hint["cookie_idx"]
         if c_idx < len(strategies):
-            # Move hinted strategy to front
             hinted_strat = strategies.pop(c_idx)
             strategies.insert(0, hinted_strat)
 
@@ -345,6 +339,33 @@ def _extract_with_cookie_fallback(
     if last_exc:
         raise last_exc
     raise Exception("All extraction strategies failed.")
+
+
+@app.route("/api/test-fetch")
+def api_test_fetch():
+    import time
+    t0 = time.time()
+    try:
+        url = request.args.get("url") or "https://youtu.be/eQOqpctSNs8"
+        base_opts = {
+            "quiet": True,
+            "skip_download": True,
+            "socket_timeout": 10,
+        }
+        info, hint = _extract_with_cookie_fallback(base_opts, url, download=False)
+        return jsonify({
+            "success": True,
+            "time": round(time.time() - t0, 2),
+            "title": info.get("title"),
+            "formats": len(info.get("formats", [])),
+            "hint": hint,
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "time": round(time.time() - t0, 2),
+            "error": str(e),
+        }), 500
 
 
 def get_video_info(url: str) -> tuple[dict, dict]:
