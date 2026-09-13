@@ -346,31 +346,42 @@ def _extract_with_cookie_fallback(
     raise Exception("All extraction strategies failed.")
 
 
-@app.route("/api/test-fetch")
-def api_test_fetch():
+@app.route("/api/test-clients")
+def api_test_clients():
     import time
-    t0 = time.time()
-    try:
-        url = request.args.get("url") or "https://youtu.be/eQOqpctSNs8"
-        base_opts = {
-            "quiet": True,
-            "skip_download": True,
-            "socket_timeout": 10,
-        }
-        info, hint = _extract_with_cookie_fallback(base_opts, url, download=False)
-        return jsonify({
-            "success": True,
-            "time": round(time.time() - t0, 2),
-            "title": info.get("title"),
-            "formats": len(info.get("formats", [])),
-            "hint": hint,
-        })
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "time": round(time.time() - t0, 2),
-            "error": str(e),
-        }), 500
+    url = request.args.get("url") or "https://youtu.be/eQOqpctSNs8"
+    use_cookies = request.args.get("cookies", "false").lower() == "true"
+    cf = get_best_cookie_file() if use_cookies else None
+    results = {}
+    clients = ["android", "ios", "tv", "mweb", "android_vr", "web"]
+    for c in clients:
+        t0 = time.time()
+        try:
+            opts = {
+                "quiet": True,
+                "skip_download": True,
+                "socket_timeout": 5,
+                "extractor_args": {"youtube": {"player_client": [c]}},
+                "no_color": True,
+                "nocheckcertificate": True,
+            }
+            if cf:
+                opts["cookiefile"] = cf
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            results[c] = {
+                "status": "success",
+                "time": round(time.time() - t0, 2),
+                "formats": len(info.get("formats", [])),
+                "heights": sorted(set(f.get("height") for f in info.get("formats", []) if f.get("height"))),
+            }
+        except Exception as e:
+            results[c] = {
+                "status": "error",
+                "time": round(time.time() - t0, 2),
+                "error": str(e)[:100],
+            }
+    return jsonify({"use_cookies": use_cookies, "cookie_file": bool(cf), "results": results})
 
 
 def get_video_info(url: str) -> tuple[dict, dict]:
