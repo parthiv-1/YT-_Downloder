@@ -273,18 +273,19 @@ def _extract_with_cookie_fallback(
     current_cookie_file = get_best_cookie_file()
     has_cookies = bool(current_cookie_file and os.path.isfile(current_cookie_file))
 
-    # Fast strategies: 1) With cookies (if available), 2) Without cookies (bypass clients)
-    strategies = []
-    if has_cookies:
-        strategies.append({
-            "name": "Authenticated (Cookies + VisionOS/Android)",
+    # Fast strategies:
+    # 1) Primary: VisionOS client without cookies (instant 2-3s, unthrottled, up to 4K, bypasses datacenter bot blocks)
+    #    Note: yt-dlp explicitly skips visionos if a cookiefile is present, so visionos must run cookie-free.
+    # 2) Fallback: Authenticated extraction using cookies (if available, for 18+ or private videos)
+    strategies = [
+        {
+            "name": "Primary (VisionOS Cloud-Bypass)",
             "opts": {
                 **base_opts,
-                "cookiefile": current_cookie_file,
-                "socket_timeout": 10,
+                "socket_timeout": 12,
                 "extractor_args": {
                     "youtube": {
-                        "player_client": ["visionos", "android"],
+                        "player_client": ["visionos"],
                         "include_dash_manifest": True,
                     }
                 },
@@ -293,33 +294,28 @@ def _extract_with_cookie_fallback(
                 "nocheckcertificate": True,
             },
             "hint": {"cookie_idx": 0, "config_idx": 0},
-        })
+        }
+    ]
 
-    # Fallback strategy (or primary if no cookies)
-    strategies.append({
-        "name": "Fallback (Unauthenticated VisionOS/Android)",
-        "opts": {
-            **base_opts,
-            "socket_timeout": 10,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["visionos", "android"],
-                    "include_dash_manifest": True,
-                }
+    if has_cookies:
+        strategies.append({
+            "name": "Fallback (Authenticated with Cookies)",
+            "opts": {
+                **base_opts,
+                "cookiefile": current_cookie_file,
+                "socket_timeout": 12,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["tv", "mweb", "web"],
+                        "include_dash_manifest": True,
+                    }
+                },
+                "js_runtimes": {"node": {}},
+                "no_color": True,
+                "nocheckcertificate": True,
             },
-            "js_runtimes": {"node": {}},
-            "no_color": True,
-            "nocheckcertificate": True,
-        },
-        "hint": {"cookie_idx": 1, "config_idx": 0},
-    })
-
-    # If hint was provided from previous successful fetch, prioritize that strategy
-    if hint and "cookie_idx" in hint:
-        c_idx = hint["cookie_idx"]
-        if c_idx < len(strategies):
-            hinted_strat = strategies.pop(c_idx)
-            strategies.insert(0, hinted_strat)
+            "hint": {"cookie_idx": 1, "config_idx": 0},
+        })
 
     last_exc: Exception | None = None
     for s in strategies:
