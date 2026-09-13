@@ -277,14 +277,15 @@ def _extract_with_cookie_fallback(
     strategies = []
     if has_cookies:
         strategies.append({
-            "name": "Authenticated (Cookies + Mobile/TV)",
+            "name": "Authenticated (Cookies + VisionOS/Android)",
             "opts": {
                 **base_opts,
                 "cookiefile": current_cookie_file,
                 "socket_timeout": 10,
                 "extractor_args": {
                     "youtube": {
-                        "player_skip": ["web", "web_creator", "web_embedded"],
+                        "player_client": ["visionos", "android"],
+                        "include_dash_manifest": True,
                     }
                 },
                 "js_runtimes": {"node": {}},
@@ -296,13 +297,14 @@ def _extract_with_cookie_fallback(
 
     # Fallback strategy (or primary if no cookies)
     strategies.append({
-        "name": "Fallback (Unauthenticated Mobile/TV Bypass)",
+        "name": "Fallback (Unauthenticated VisionOS/Android)",
         "opts": {
             **base_opts,
             "socket_timeout": 10,
             "extractor_args": {
                 "youtube": {
-                    "player_skip": ["web", "web_creator", "web_embedded"],
+                    "player_client": ["visionos", "android"],
+                    "include_dash_manifest": True,
                 }
             },
             "js_runtimes": {"node": {}},
