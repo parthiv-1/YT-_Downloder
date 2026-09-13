@@ -351,16 +351,17 @@ def api_test_clients():
     import time
     url = request.args.get("url") or "https://youtu.be/eQOqpctSNs8"
     use_cookies = request.args.get("cookies", "false").lower() == "true"
+    client_param = request.args.get("client")
     cf = get_best_cookie_file() if use_cookies else None
     results = {}
-    clients = ["android", "ios", "tv", "mweb", "android_vr", "web"]
+    clients = [client_param] if client_param else ["android", "tv", "ios", "mweb", "android_vr", "web"]
     for c in clients:
         t0 = time.time()
         try:
             opts = {
                 "quiet": True,
                 "skip_download": True,
-                "socket_timeout": 5,
+                "socket_timeout": 4,
                 "extractor_args": {"youtube": {"player_client": [c]}},
                 "no_color": True,
                 "nocheckcertificate": True,
